@@ -1,0 +1,155 @@
+using Microsoft.AspNetCore.Mvc;
+using Rolling.Infrastructure.Persistence.Memory;
+
+namespace Rolling.Web.Controllers;
+
+[ApiController]
+[Route("api/cache")]
+public class CacheController : ControllerBase
+{
+    private readonly IInMemoryCacheService _cacheService;
+    private readonly ILogger<CacheController> _logger;
+
+    public CacheController(
+        IInMemoryCacheService cacheService,
+        ILogger<CacheController> logger)
+    {
+        _cacheService = cacheService;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// GET /api/cache/stats
+    /// Get cache statistics
+    /// </summary>
+    [HttpGet("stats")]
+    public IActionResult GetStats()
+    {
+        try
+        {
+            var stats = _cacheService.GetStats();
+            return Ok(stats);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting cache stats");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/cache/clear
+    /// Clear all cache
+    /// </summary>
+    [HttpPost("clear")]
+    public IActionResult ClearCache()
+    {
+        try
+        {
+            var count = _cacheService.Clear();
+            return Ok(new
+            {
+                message = "Cache cleared",
+                keysDeleted = count
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing cache");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// DELETE /api/cache/:key
+    /// Delete specific cache key
+    /// </summary>
+    [HttpDelete("{key}")]
+    public IActionResult DeleteKey(string key)
+    {
+        try
+        {
+            _cacheService.Delete(key);
+            return Ok(new
+            {
+                message = $"Cache key \"{key}\" deleted"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting cache key {Key}", key);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// GET /api/cache/:key
+    /// Get specific cache key value
+    /// </summary>
+    [HttpGet("{key}")]
+    public IActionResult GetKey(string key)
+    {
+        try
+        {
+            var data = _cacheService.Get<object>(key);
+            var ttl = _cacheService.GetTTL(key);
+
+            if (data == null)
+            {
+                return NotFound(new { error = "Cache key not found" });
+            }
+
+            return Ok(new
+            {
+                key,
+                data,
+                ttl = ttl?.TotalSeconds
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting cache key {Key}", key);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/cache/:key
+    /// Set cache key manually
+    /// </summary>
+    [HttpPost("{key}")]
+    public IActionResult SetKey(string key, [FromBody] SetCacheRequest request)
+    {
+        try
+        {
+            if (request.Data == null)
+            {
+                return BadRequest(new { error = "Data is required" });
+            }
+
+            TimeSpan? ttl = request.Ttl.HasValue
+                ? TimeSpan.FromSeconds(request.Ttl.Value)
+                : null;
+
+            _cacheService.Set(key, request.Data, ttl);
+
+            return Ok(new
+            {
+                message = $"Cache key \"{key}\" set successfully",
+                key,
+                ttl = request.Ttl?.ToString() ?? "default"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting cache key {Key}", key);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    public class SetCacheRequest
+    {
+        public object? Data { get; set; }
+        public int? Ttl { get; set; }
+    }
+}

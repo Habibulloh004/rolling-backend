@@ -1,0 +1,45 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/artifacts/
+**/publish/
+
+# User-specific IDE files
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+*.sln.iml
+
+# NuGet packages
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+
+# Logs and coverage
+logs/
+*.log
+TestResults/
+*.coverage
+*.coveragexml
+coverage/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# App settings with local secrets
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.local.json
+
+# Runtime uploads
+Rolling.Web/wwwroot/uploads/

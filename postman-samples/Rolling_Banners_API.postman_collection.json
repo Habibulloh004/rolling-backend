@@ -1,0 +1,513 @@
+{
+  "info": {
+    "name": "Rolling Banners API",
+    "description": "Complete API collection for managing banners in Rolling app",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Banners",
+      "item": [
+        {
+          "name": "1. Welcome Banner (EN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Welcome to Rolling!\",\n  \"subtitle\": \"Get Started\",\n  \"description\": \"<p>Enjoy <strong>10% off</strong> on your first order!</p><p>Use code: <em>WELCOME10</em></p>\",\n  \"lang\": \"en\",\n  \"path\": \"/menu\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "2. Summer Sale (RU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Летняя распродажа\",\n  \"subtitle\": \"Скидки до 30%\",\n  \"description\": \"<p>🌞 Лето в разгаре!</p><p>Получите скидку до <strong>30%</strong> на все роллы и суши сеты.</p><ul><li>Бесплатная доставка при заказе от 100 000 сум</li><li>Подарок к каждому заказу</li></ul>\",\n  \"lang\": \"ru\",\n  \"path\": \"/category/sets\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "3. New Product (UZ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Yangi mahsulot!\",\n  \"subtitle\": \"Dragon Roll to'plami\",\n  \"description\": \"<p>🐉 Yangi <strong>Dragon Roll</strong> to'plamini sinab ko'ring!</p><p>Maxsus taom va ajoyib ta'm.</p>\",\n  \"lang\": \"uz\",\n  \"path\": \"/product/dragon-roll\",\n  \"url\": \"https://example.com/special-offer\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "4. Free Delivery (EN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Free Delivery\",\n  \"subtitle\": \"Limited Time Offer\",\n  \"description\": \"<p>🚚 Free delivery on all orders!</p><p>Valid until the end of the month.</p><br/><p><strong>Order now and save!</strong></p>\",\n  \"lang\": \"en\",\n  \"path\": \"/menu\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "5. Weekend Special (RU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Выходные со вкусом\",\n  \"subtitle\": \"Специальное предложение\",\n  \"description\": \"<h3>Выходные специально для вас!</h3><p>Закажите 2 сета и получите 3-й <strong>в подарок</strong>!</p><p>&nbsp;</p><p>Акция действует только в субботу и воскресенье.</p>\",\n  \"lang\": \"ru\",\n  \"path\": \"/category/sets\",\n  \"url\": \"https://rollingadmin.uz/weekend-promo\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "6. Loyalty Program (EN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Join Our Loyalty Program\",\n  \"subtitle\": \"Earn Rewards\",\n  \"description\": \"<p>🎁 Earn points with every order!</p><br/><ul><li>1 point = 1000 sum spent</li><li>100 points = Free delivery</li><li>500 points = Free roll</li></ul><p>&mdash; Start earning today!</p>\",\n  \"lang\": \"en\",\n  \"path\": \"/profile/loyalty\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "7. Happy Hour (RU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Счастливые часы\",\n  \"subtitle\": \"14:00 - 17:00\",\n  \"description\": \"<p>⏰ С 14:00 до 17:00 &ndash; скидка 20%!</p><p>На все роллы и горячие блюда.</p><p>&bull; Только для заказов через приложение<br/>&bull; Не суммируется с другими акциями</p>\",\n  \"lang\": \"ru\",\n  \"path\": \"/menu\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "8. Student Discount (UZ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Talabalar uchun chegirma\",\n  \"subtitle\": \"15% tejang\",\n  \"description\": \"<p>📚 Talaba kartangizni ko'rsating va <strong>15% chegirma</strong> oling!</p><p>Har kuni, barcha buyurtmalarda.</p>\",\n  \"lang\": \"uz\",\n  \"path\": \"/menu\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "9. Birthday Special (EN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Birthday Celebration\",\n  \"subtitle\": \"Special Gift for You\",\n  \"description\": \"<p>🎂 It's your birthday month?</p><p>Get a <strong>free dessert</strong> with any order over 50,000 sum!</p><p>&laquo;Because birthdays should be special&raquo;</p>\",\n  \"lang\": \"en\",\n  \"path\": \"/menu\",\n  \"url\": \"https://example.com/birthday\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "10. New Menu Items (RU)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Новинки в меню\",\n  \"subtitle\": \"Попробуйте что-то новое\",\n  \"description\": \"<p>✨ Откройте для себя наши новые блюда!</p><p><strong>Новые вкусы:</strong></p><ol><li>Спайси тунец ролл</li><li>Лосось терияки сет</li><li>Креветка темпура</li></ol><p>Попробуйте все три со скидкой 25%!</p>\",\n  \"lang\": \"ru\",\n  \"path\": \"/category/new-items\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "11. Family Combo (UZ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Oilaviy to'plam\",\n  \"subtitle\": \"4 kishilik\",\n  \"description\": \"<p>👨‍👩‍👧‍👦 Butun oila uchun maxsus to'plam!</p><p>60 dona roll, 4 ta ichimlik va 2 ta desert - atiga <strong>250,000 so'm</strong></p><p>Odatdagidan 40% arzonroq!</p>\",\n  \"lang\": \"uz\",\n  \"path\": \"/category/family-sets\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "12. Corporate Catering (EN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Corporate Catering\",\n  \"subtitle\": \"For Business Events\",\n  \"description\": \"<p>💼 Planning a corporate event?</p><p>We offer special packages for:</p><ul><li>Office parties</li><li>Business meetings</li><li>Team building events</li></ul><p>Contact us for custom quotes!</p>\",\n  \"lang\": \"en\",\n  \"path\": \"/corporate\",\n  \"url\": \"https://example.com/corporate-catering\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Banners",
+      "item": [
+        {
+          "name": "Get All Banners",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "Get Banners (Russian)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners?lang=ru",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "ru"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Banners (English)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners?lang=en",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "en"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Banners (Uzbek)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners?lang=uz",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "uz"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Banner by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Banners",
+      "item": [
+        {
+          "name": "Update Title & Subtitle",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Welcome Banner\",\n  \"subtitle\": \"New Subtitle\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Description",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"<p>New <strong>updated</strong> description with HTML!</p>\"\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        },
+        {
+          "name": "Deactivate Banner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        },
+        {
+          "name": "Reactivate Banner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Banners",
+      "item": [
+        {
+          "name": "Soft Delete (Deactivate)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1"]
+            }
+          }
+        },
+        {
+          "name": "Permanent Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://192.168.1.9:5020/api/banners/1/permanent",
+              "protocol": "http",
+              "host": ["192", "168", "1", "9"],
+              "port": "5020",
+              "path": ["api", "banners", "1", "permanent"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

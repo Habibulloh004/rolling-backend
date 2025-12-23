@@ -1,0 +1,1376 @@
+{
+  "info": {
+    "_postman_id": "4e8f0a1d-rolling-backend-collection",
+    "name": "Rolling Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection covering the ASP.NET Rolling backend routes (notifications, payments, utilities). Update the {{baseUrl}} variable to point at your running host."
+  },
+  "item": [
+    {
+      "name": "Notifications API",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/notifications?take=20"
+          }
+        },
+        {
+          "name": "Create Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"system\",\n  \"title\": \"Test notification\",\n  \"message\": \"Hello Rolling!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/notifications"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Data",
+      "item": [
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/transaction?take=50"
+          }
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users?take=50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Seed Data",
+      "item": [
+        {
+          "name": "Seed All",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=all&count=5"
+          }
+        },
+        {
+          "name": "Seed Notifications (domain + news)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=notifications&count=3"
+          }
+        },
+        {
+          "name": "Seed Transactions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=transactions&count=3"
+          }
+        },
+        {
+          "name": "Seed Users",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=users&count=3"
+          }
+        },
+        {
+          "name": "Seed Orders",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=orders&count=3"
+          }
+        },
+        {
+          "name": "Seed Times",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed?model=times&count=3"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Click Payments",
+      "item": [
+        {
+          "name": "Prepare",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"click_trans_id\": \"123456\",\n  \"service_id\": \"SERVICE_ID\",\n  \"merchant_trans_id\": \"ORDER_ID\",\n  \"amount\": 100000,\n  \"action\": 0,\n  \"sign_time\": 1714821600,\n  \"sign_string\": \"SIGNATURE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/click/prepare"
+          }
+        },
+        {
+          "name": "Complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"click_trans_id\": \"123456\",\n  \"service_id\": \"SERVICE_ID\",\n  \"merchant_trans_id\": \"ORDER_ID\",\n  \"merchant_prepare_id\": \"MERCHANT_PREPARE_ID\",\n  \"amount\": 100000,\n  \"action\": 1,\n  \"sign_time\": 1714821660,\n  \"sign_string\": \"SIGNATURE\",\n  \"error\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/click/complete"
+          }
+        },
+        {
+          "name": "Checkout URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderDetails\": {\n    \"service_mode\": 2,\n    \"comment\": \"Delivery order\"\n  },\n  \"amount\": 150000,\n  \"userId\": \"USER-123\",\n  \"url\": \"https://app.example.com/return\"\n}"
+            },
+            "url": "{{baseUrl}}/api/click/checkout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payme Payments",
+      "item": [
+        {
+          "name": "Payme RPC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic {{paymeAuth}}",
+                "description": "Base64 encoded username:PAYME_MERCHANT_KEY"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"CheckPerformTransaction\",\n  \"params\": {\n    \"amount\": 100000,\n    \"account\": {\n      \"order_id\": \"ORDER_ID\"\n    }\n  },\n  \"id\": \"req-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payme/pay"
+          }
+        },
+        {
+          "name": "Payme Checkout URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderDetails\": {\n    \"service_mode\": 3,\n    \"comment\": \"Pickup order\"\n  },\n  \"amount\": 90000,\n  \"userId\": \"USER-123\",\n  \"url\": \"https://app.example.com/payme-return\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payme/checkout"
+          }
+        },
+        {
+          "name": "Get Transaction by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/transaction/{{transactionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Send Topic Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageType\": \"newPromotion\",\n  \"customTitle\": \"New offer\",\n  \"customBody\": \"Discounts for everyone\",\n  \"data\": {\n    \"promoId\": \"PROMO-35\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/send/topic/en"
+          }
+        },
+        {
+          "name": "Send Device Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"en\",\n  \"messageType\": \"body\",\n  \"customTitle\": \"Personal alert\",\n  \"customBody\": \"Your order is ready\"\n}"
+            },
+            "url": "{{baseUrl}}/send/device"
+          }
+        },
+        {
+          "name": "Register Device Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"en\",\n  \"userId\": \"USER-123\"\n}"
+            },
+            "url": "{{baseUrl}}/tokens/register"
+          }
+        },
+        {
+          "name": "Update Token Language",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"ru\"\n}"
+            },
+            "url": "{{baseUrl}}/tokens/language"
+          }
+        },
+        {
+          "name": "Unregister Token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"en\"\n}"
+            },
+            "url": "{{baseUrl}}/tokens/unregister"
+          }
+        },
+        {
+          "name": "Tokens Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "List Tokens",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tokens-get"
+          }
+        },
+        {
+          "name": "Get Token By Value",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tokens/{{deviceToken}}"
+          }
+        },
+        {
+          "name": "Messages Metadata",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/messages"
+          }
+        },
+        {
+          "name": "Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/stats"
+          }
+        },
+        {
+          "name": "Clean Tokens (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/admin/clean-tokens"
+          }
+        },
+        {
+          "name": "Test Direct Push",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"DEVICE_TOKEN\"\n}"
+            },
+            "url": "{{baseUrl}}/test-direct"
+          }
+        },
+        {
+          "name": "Send To All Languages",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageType\": \"newPromotion\",\n  \"customMessages\": {\n    \"en\": { \"title\": \"EN title\", \"body\": \"EN body\" },\n    \"ru\": { \"title\": \"RU title\", \"body\": \"RU body\" },\n    \"uz\": { \"title\": \"UZ title\", \"body\": \"UZ body\" }\n  },\n  \"data\": {\n    \"promoId\": \"PROMO-35\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/send/all-languages"
+          }
+        },
+        {
+          "name": "Send To Multiple Devices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceTokens\": [\"DEVICE_TOKEN_1\", \"DEVICE_TOKEN_2\"],\n  \"language\": \"en\",\n  \"messageType\": \"body\",\n  \"customTitle\": \"Hello\",\n  \"customBody\": \"World\"\n}"
+            },
+            "url": "{{baseUrl}}/send/devices"
+          }
+        },
+        {
+          "name": "Subscribe Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"en\"\n}"
+            },
+            "url": "{{baseUrl}}/subscribe"
+          }
+        },
+        {
+          "name": "Unsubscribe Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"DEVICE_TOKEN\",\n  \"language\": \"en\"\n}"
+            },
+            "url": "{{baseUrl}}/unsubscribe"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Utilities",
+      "item": [
+        {
+          "name": "Notify Endpoint (FCM topic)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fcm\": \"all_users_en\",\n  \"fcm_lng\": \"en\",\n  \"status\": \"orderReady\"\n}"
+            },
+            "url": "{{baseUrl}}/notify"
+          }
+        },
+        {
+          "name": "Get Time",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/get_time"
+          }
+        },
+        {
+          "name": "Update Time",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"opened_time\": \"09:00\",\n  \"closed_time\": \"23:00\"\n}"
+            },
+            "url": "{{baseUrl}}/edit_time"
+          }
+        },
+        {
+          "name": "Get News",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/getNews"
+          }
+        },
+        {
+          "name": "Create News + Broadcast",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageType\": \"newPromotion\",\n  \"en\": { \"title\": \"EN title\", \"body\": \"EN body\" },\n  \"ru\": { \"title\": \"RU title\", \"body\": \"RU body\" },\n  \"uz\": { \"title\": \"UZ title\", \"body\": \"UZ body\" }\n}"
+            },
+            "url": "{{baseUrl}}/createNews"
+          }
+        },
+        {
+          "name": "Delete News",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/deleteNews/{{newsId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Poster Bridge",
+      "item": [
+        {
+          "name": "List Client Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/posterClientGroup"
+          }
+        },
+        {
+          "name": "Get Client by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/posterClient/{{posterClientId}}"
+          }
+        },
+        {
+          "name": "Create Poster Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\",\n  \"client_name\": \"Rolling Tester\",\n  \"card_number\": \"1234\",\n  \"email\": \"tester@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/posterCreateClient"
+          }
+        },
+        {
+          "name": "List Poster Clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/posterClients"
+          }
+        },
+        {
+          "name": "Search Client by Phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/getClientTransaction/{{clientPhone}}"
+          }
+        },
+        {
+          "name": "Poster Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/posterProducts"
+          }
+        },
+        {
+          "name": "Poster Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/posterCategories"
+          }
+        },
+        {
+          "name": "Available Spots",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/getSpot"
+          }
+        },
+        {
+          "name": "Create Incoming Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\",\n  \"service_mode\": 2,\n  \"comment\": \"Manual incoming order\"\n}"
+            },
+            "url": "{{baseUrl}}/api/posttoposter"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courier Operations",
+      "item": [
+        {
+          "name": "Poster Webhook Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_id\": \"{{orderId}}\",\n  \"data\": \"{\\\"transactions_history\\\":{\\\"type_history\\\":\\\"changeprocessingstatus\\\",\\\"value\\\":40}}\"\n}"
+            },
+            "url": "{{baseUrl}}/"
+          }
+        },
+        {
+          "name": "Manual Poster Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": {\n    \"orderName\": \"{{orderId}}\",\n    \"deliveryInfo\": { \"courierId\": {{courierId}} }\n  }\n}"
+            },
+            "url": "{{baseUrl}}/posterFromMe"
+          }
+        },
+        {
+          "name": "Socket Payload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"message\": \"Test payload\"\n}"
+            },
+            "url": "{{baseUrl}}/socketData"
+          }
+        },
+        {
+          "name": "Delete Order by Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"{{orderId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/deleteOrder"
+          }
+        },
+        {
+          "name": "Broadcast from Stark",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"status\": \"waiting\"\n}"
+            },
+            "url": "{{baseUrl}}/postFromStark"
+          }
+        },
+        {
+          "name": "List Courier Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/getOrders/{{courierId}}"
+          }
+        },
+        {
+          "name": "Find Order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/findOrder/{{orderId}}"
+          }
+        },
+        {
+          "name": "Change Order Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"delivered\"\n}"
+            },
+            "url": "{{baseUrl}}/changeStatus/{{orderId}}"
+          }
+        },
+        {
+          "name": "Delete Order",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/deleteOrder/{{orderId}}"
+          }
+        },
+        {
+          "name": "Delete Orders by Courier",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/deleteOrders/{{courierId}}"
+          }
+        },
+        {
+          "name": "Query Poster Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/getTransaction?id={{courierId}}&date={{transactionDate}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courier Access & Messaging",
+      "item": [
+        {
+          "name": "Courier Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"courier@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Send Telegram Message",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/sendMessageToTelegram?message={{telegramText}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Poster API (Cached)",
+      "item": [
+        {
+          "name": "Menu",
+          "item": [
+            {
+              "name": "Get Products",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/products"
+              }
+            },
+            {
+              "name": "Revalidate Products",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/products/revalidate"
+              }
+            },
+            {
+              "name": "Get Categories",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/categories"
+              }
+            },
+            {
+              "name": "Revalidate Categories",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/categories/revalidate"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clients",
+          "item": [
+            {
+              "name": "Get Clients",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/clients"
+              }
+            },
+            {
+              "name": "Get Clients by Phone",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/clients?phone={{clientPhone}}"
+              }
+            },
+            {
+              "name": "Revalidate Clients",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/clients/revalidate"
+              }
+            },
+            {
+              "name": "Get Client by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/clients/{{posterClientId}}"
+              }
+            },
+            {
+              "name": "Revalidate Client by ID",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/clients/{{posterClientId}}/revalidate"
+              }
+            },
+            {
+              "name": "Get Client Groups",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/client-groups"
+              }
+            },
+            {
+              "name": "Revalidate Client Groups",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/client-groups/revalidate"
+              }
+            },
+            {
+              "name": "Create Client",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"998901112233\",\n  \"client_name\": \"Test Client\",\n  \"email\": \"test@example.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/poster/clients"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orders",
+          "item": [
+            {
+              "name": "Create Incoming Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"998901112233\",\n  \"service_mode\": 2,\n  \"comment\": \"Test order from new API\"\n}"
+                },
+                "url": "{{baseUrl}}/api/poster/orders"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transactions",
+          "item": [
+            {
+              "name": "Get Transactions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/transactions?courier_id={{courierId}}&dateFrom={{transactionDate}}&dateTo={{transactionDate}}"
+              }
+            },
+            {
+              "name": "Revalidate Transactions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/transactions/revalidate?courier_id={{courierId}}&dateFrom={{transactionDate}}&dateTo={{transactionDate}}"
+              }
+            },
+            {
+              "name": "Get Transaction by ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/transactions/{{transactionId}}"
+              }
+            },
+            {
+              "name": "Get Transaction Products",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/transactions/{{transactionId}}/products"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Locations & Employees",
+          "item": [
+            {
+              "name": "Get Spots",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/spots"
+              }
+            },
+            {
+              "name": "Revalidate Spots",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/spots/revalidate"
+              }
+            },
+            {
+              "name": "Get Employees",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/employees"
+              }
+            },
+            {
+              "name": "Revalidate Employees",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/employees/revalidate"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Global Operations",
+          "item": [
+            {
+              "name": "Revalidate All Caches",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/revalidate-all"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Support Chat API",
+      "item": [
+        {
+          "name": "1️⃣ Open Support Chat Thread",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save threadId from response for subsequent requests",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('threadId', response.id);",
+                  "    console.log('✅ Thread created:', response.id);",
+                  "    console.log('📝 Recent messages:', response.recentMessages.length);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"customerUserId\": \"{{customerUserId}}\",\n  \"customerDisplayName\": \"John Doe\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/chat",
+            "description": "**Step 1: Open a chat thread**\n\nOpens a new support chat thread for an order. Returns the thread with participants and recent messages.\n\n**Auto-saves:** threadId to environment variables for next steps"
+          }
+        },
+        {
+          "name": "2️⃣ Connect WebSocket (Customer)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Validate required variables",
+                  "const threadId = pm.environment.get('threadId');",
+                  "const customerUserId = pm.environment.get('customerUserId');",
+                  "",
+                  "if (!threadId) {",
+                  "    throw new Error('❌ threadId not set! Run \"1️⃣ Open Support Chat Thread\" first');",
+                  "}",
+                  "",
+                  "console.log('🔌 Connecting to thread:', threadId);",
+                  "console.log('👤 As user:', customerUserId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "WEBSOCKET",
+            "header": [],
+            "url": {
+              "raw": "{{wsUrl}}/ws/chat?threadId={{threadId}}&senderId={{customerUserId}}&role=Customer",
+              "host": ["{{wsUrl}}"],
+              "path": ["ws", "chat"],
+              "query": [
+                {
+                  "key": "threadId",
+                  "value": "{{threadId}}",
+                  "description": "Chat thread UUID (from Open Chat endpoint)"
+                },
+                {
+                  "key": "senderId",
+                  "value": "{{customerUserId}}",
+                  "description": "Customer user UUID"
+                },
+                {
+                  "key": "role",
+                  "value": "Customer",
+                  "description": "Participant role: Customer, Support, or System"
+                }
+              ]
+            },
+            "description": "**Step 2: Connect via WebSocket as Customer**\n\n**Connection URL:** `ws://host/ws/chat?threadId={uuid}&senderId={uuid}&role=Customer`\n\n**Query Parameters:**\n- `threadId` (required) - Chat thread UUID\n- `senderId` (required) - User UUID\n- `role` (required) - \"Customer\", \"Support\", or \"System\"\n\n**Ping/Pong:** Send `ping` to receive `pong`\n\n**Message Format (Send):**\n```json\n{\n  \"type\": \"message\",\n  \"payload\": {\n    \"contentType\": 1,\n    \"body\": \"Hello!\"\n  },\n  \"clientMessageId\": \"unique-uuid\"\n}\n```\n\n**Message Format (Receive):**\n```json\n{\n  \"type\": \"message\",\n  \"payload\": {\n    \"id\": \"msg-uuid\",\n    \"threadId\": \"thread-uuid\",\n    \"senderId\": \"user-uuid\",\n    \"senderRole\": 1,\n    \"contentType\": 1,\n    \"body\": \"Message text\",\n    \"sentAt\": \"2024-12-08T10:30:00Z\",\n    \"status\": 1\n  },\n  \"clientMessageId\": \"unique-uuid\"\n}\n```",
+            "websocket": {
+              "message": [
+                {
+                  "data": "{\n  \"type\": \"message\",\n  \"payload\": {\n    \"contentType\": 1,\n    \"body\": \"Hello! I need help with my order.\"\n  },\n  \"clientMessageId\": \"{{$guid}}\"\n}",
+                  "description": "Send a text message"
+                },
+                {
+                  "data": "ping",
+                  "description": "Ping to keep connection alive"
+                },
+                {
+                  "data": "{\n  \"type\": \"message\",\n  \"payload\": {\n    \"contentType\": 1,\n    \"body\": \"Is anyone there?\"\n  },\n  \"clientMessageId\": \"{{$guid}}\"\n}",
+                  "description": "Send follow-up message"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3️⃣ Connect WebSocket (Support)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Validate required variables",
+                  "const threadId = pm.environment.get('threadId');",
+                  "const supportUserId = pm.environment.get('supportUserId');",
+                  "",
+                  "if (!threadId) {",
+                  "    throw new Error('❌ threadId not set! Run \"1️⃣ Open Support Chat Thread\" first');",
+                  "}",
+                  "",
+                  "console.log('🔌 Support agent connecting to thread:', threadId);",
+                  "console.log('👤 As user:', supportUserId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "WEBSOCKET",
+            "header": [],
+            "url": {
+              "raw": "{{wsUrl}}/ws/chat?threadId={{threadId}}&senderId={{supportUserId}}&role=Support",
+              "host": ["{{wsUrl}}"],
+              "path": ["ws", "chat"],
+              "query": [
+                {
+                  "key": "threadId",
+                  "value": "{{threadId}}"
+                },
+                {
+                  "key": "senderId",
+                  "value": "{{supportUserId}}"
+                },
+                {
+                  "key": "role",
+                  "value": "Support"
+                }
+              ]
+            },
+            "description": "**Step 3: Connect via WebSocket as Support Agent**\n\nConnect as support staff to respond to customer messages. All messages sent will have `senderRole: 2` (Support).\n\n**Use Case:** Simulate support agent responding to customer inquiries.",
+            "websocket": {
+              "message": [
+                {
+                  "data": "{\n  \"type\": \"message\",\n  \"payload\": {\n    \"contentType\": 1,\n    \"body\": \"Hello! How can I help you today?\"\n  },\n  \"clientMessageId\": \"{{$guid}}\"\n}",
+                  "description": "Support agent greeting"
+                },
+                {
+                  "data": "{\n  \"type\": \"message\",\n  \"payload\": {\n    \"contentType\": 1,\n    \"body\": \"I've checked your order status. Let me help you with that.\"\n  },\n  \"clientMessageId\": \"{{$guid}}\"\n}",
+                  "description": "Support agent response"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4️⃣ Get Chat Messages (HTTP)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/chat/{{threadId}}/messages?take=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "chat", "{{threadId}}", "messages"],
+              "query": [
+                {
+                  "key": "take",
+                  "value": "50",
+                  "description": "Number of messages to retrieve (default: 50, max: 100)"
+                },
+                {
+                  "key": "beforeMessageId",
+                  "value": "{{beforeMessageId}}",
+                  "description": "Load messages before this message ID (for pagination)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "**Step 4: Retrieve message history via HTTP**\n\nFetches chat messages from a thread. Useful for:\n- Loading initial message history\n- Pagination of older messages\n- Syncing after reconnection\n\n**Pagination:** Enable `beforeMessageId` and set to a message UUID to load older messages."
+          }
+        },
+        {
+          "name": "5️⃣ Send Message (HTTP Fallback)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{customerUserId}}\",\n  \"senderRole\": 1,\n  \"contentType\": 1,\n  \"body\": \"This message sent via HTTP (WebSocket fallback)\"\n}"
+            },
+            "url": "{{baseUrl}}/api/chat/{{threadId}}/messages",
+            "description": "**Step 5: Send message via HTTP (Fallback)**\n\nUse when WebSocket is unavailable or for server-side integrations.\n\n**Enumerations:**\n\n**senderRole:**\n- `1` = Customer\n- `2` = Support\n- `3` = System\n\n**contentType:**\n- `1` = Text\n- `2` = Image\n- `3` = System notification\n\n**status (returned):**\n- `1` = Sent\n- `2` = Delivered\n- `3` = Read"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cache Management",
+      "item": [
+        {
+          "name": "Get Cache Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cache/stats"
+          }
+        },
+        {
+          "name": "Clear All Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/cache/clear"
+          }
+        },
+        {
+          "name": "Get Cache Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cache/{{cacheKey}}"
+          }
+        },
+        {
+          "name": "Set Cache Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": {\"test\": \"value\"},\n  \"ttl\": 3600\n}"
+            },
+            "url": "{{baseUrl}}/api/cache/{{cacheKey}}"
+          }
+        },
+        {
+          "name": "Delete Cache Key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/cache/{{cacheKey}}"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5020",
+      "description": "Backend HTTP API base URL"
+    },
+    {
+      "key": "wsUrl",
+      "value": "ws://localhost:5020",
+      "description": "Backend WebSocket base URL (use wss:// for HTTPS)"
+    },
+    {
+      "key": "paymeAuth",
+      "value": "UEFZTUVfVVNFUjpQQVlNRV9NRVJDSEFOVF9LRVk=",
+      "description": "Base64 encoded credentials for Payme RPC"
+    },
+    {
+      "key": "transactionId",
+      "value": "ORDER_ID"
+    },
+    {
+      "key": "newsId",
+      "value": "1"
+    },
+    {
+      "key": "posterClientId",
+      "value": "1"
+    },
+    {
+      "key": "clientPhone",
+      "value": "998901112233"
+    },
+    {
+      "key": "courierId",
+      "value": "101"
+    },
+    {
+      "key": "orderId",
+      "value": "TRX-1001"
+    },
+    {
+      "key": "transactionDate",
+      "value": "2024-05-14"
+    },
+    {
+      "key": "telegramText",
+      "value": "Hello%20from%20Rolling"
+    },
+    {
+      "key": "deviceToken",
+      "value": "DEVICE_TOKEN"
+    },
+    {
+      "key": "cacheKey",
+      "value": "poster:products:{}"
+    },
+    {
+      "key": "tenantId",
+      "value": "123e4567-e89b-12d3-a456-426614174000",
+      "description": "UUID for tenant (restaurant/brand)"
+    },
+    {
+      "key": "customerId",
+      "value": "223e4567-e89b-12d3-a456-426614174001",
+      "description": "UUID for customer/client"
+    },
+    {
+      "key": "customerUserId",
+      "value": "323e4567-e89b-12d3-a456-426614174002",
+      "description": "UUID for customer user account"
+    },
+    {
+      "key": "threadId",
+      "value": "423e4567-e89b-12d3-a456-426614174003",
+      "description": "UUID for chat thread (returned from Open Chat endpoint)"
+    },
+    {
+      "key": "beforeMessageId",
+      "value": "523e4567-e89b-12d3-a456-426614174004",
+      "description": "UUID for message pagination"
+    },
+    {
+      "key": "supportUserId",
+      "value": "623e4567-e89b-12d3-a456-426614174005",
+      "description": "UUID for support agent user account"
+    }
+  ]
+}
