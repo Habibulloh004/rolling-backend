@@ -1,6 +1,7 @@
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
 using Google.Apis.Auth.OAuth2;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.Configure<FirebaseOptions>(configuration.GetSection(FirebaseOptions.SectionName));
         services.Configure<ClickOptions>(configuration.GetSection(ClickOptions.SectionName));
         services.Configure<PaymeOptions>(configuration.GetSection(PaymeOptions.SectionName));
+        services.Configure<PlumOptions>(configuration.GetSection(PlumOptions.SectionName));
         services.Configure<PosterOptions>(configuration.GetSection(PosterOptions.SectionName));
         services.Configure<TelegramOptions>(configuration.GetSection(TelegramOptions.SectionName));
 
@@ -64,6 +66,21 @@ public static class DependencyInjection
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<RedisOptions>>().Value);
         services.AddHttpClient<Rolling.Infrastructure.Messaging.TelegramService>();
         services.AddHttpClient<Rolling.Infrastructure.Poster.PosterService>();
+        services.AddHttpClient<PlumPaymentService>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<PlumOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(options.BaseUrl)
+                ? "https://pay.myuzcard.uz/api"
+                : options.BaseUrl;
+
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+            var timeout = options.RequestTimeoutSeconds <= 0 ? 100 : options.RequestTimeoutSeconds;
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(timeout, 5, 300));
+
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddScoped<OrderProcessor>();
         services.AddSingleton<NotificationTokenStore>();
         services.AddSingleton<NotificationService>();

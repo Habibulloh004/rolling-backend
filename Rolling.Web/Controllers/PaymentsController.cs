@@ -1,10 +1,14 @@
+using System.Globalization;
+using System.IO;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Rolling.Infrastructure.Payments;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Web.Filters;
 using Rolling.Web.Models.Payments;
+using Microsoft.Extensions.Primitives;
 
 namespace Rolling.Web.Controllers;
 
@@ -20,17 +24,31 @@ public sealed class PaymentsController : ControllerBase
     private readonly ClickService _clickService;
     private readonly PaymeService _paymeService;
     private readonly AppDbContext _dbContext;
+    private readonly ILogger<PaymentsController> _logger;
 
-    public PaymentsController(ClickService clickService, PaymeService paymeService, AppDbContext dbContext)
+    public PaymentsController(ClickService clickService, PaymeService paymeService, AppDbContext dbContext, ILogger<PaymentsController> logger)
     {
         _clickService = clickService;
         _paymeService = paymeService;
         _dbContext = dbContext;
+        _logger = logger;
     }
 
     [HttpPost("click/prepare")]
-    public async Task<IActionResult> ClickPrepareAsync([FromBody] ClickPrepareRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> ClickPrepareAsync(CancellationToken cancellationToken)
     {
+        var (request, rawPayload) = await BindClickPrepareRequestAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[CLICK PREPARE] Received request: ClickTransId={ClickTransId}, ServiceId={ServiceId}, MerchantTransId={MerchantTransId}, Amount={Amount}, Action={Action}, SignTime={SignTime}",
+            request.ClickTransactionId,
+            request.ServiceId,
+            request.MerchantTransactionId,
+            request.Amount,
+            request.Action,
+            request.SignTime);
+        _logger.LogInformation("[CLICK PREPARE] Raw request payload: {Payload}", rawPayload ?? "<empty>");
+
         var result = await _clickService.PrepareAsync(
             new ClickService.ClickPrepareRequest(
                 request.ClickTransactionId,
@@ -39,22 +57,50 @@ public sealed class PaymentsController : ControllerBase
                 request.Amount,
                 request.Action,
                 request.SignTime,
-                request.SignString),
+                request.SignString,
+                request.AmountRaw,
+                request.SignTimeRaw),
             cancellationToken);
 
-        return Ok(new
+        _logger.LogInformation(
+            "[CLICK PREPARE] Response: ClickTransId={ClickTransId}, MerchantTransId={MerchantTransId}, PrepareId={PrepareId}, Error={Error}, ErrorNote={ErrorNote}",
+            result.ClickTransactionId,
+            result.MerchantTransactionId,
+            result.MerchantPrepareId,
+            result.Error,
+            result.ErrorNote);
+
+        var responsePayload = new
         {
             click_trans_id = result.ClickTransactionId,
             merchant_trans_id = result.MerchantTransactionId,
             merchant_prepare_id = result.MerchantPrepareId,
             error = result.Error,
             error_note = result.ErrorNote
-        });
+        };
+
+        _logger.LogInformation("[CLICK PREPARE] Response payload: {Payload}", JsonSerializer.Serialize(responsePayload));
+
+        return Ok(responsePayload);
     }
 
     [HttpPost("click/complete")]
-    public async Task<IActionResult> ClickCompleteAsync([FromBody] ClickCompleteRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> ClickCompleteAsync(CancellationToken cancellationToken)
     {
+        var (request, rawPayload) = await BindClickCompleteRequestAsync(cancellationToken);
+
+        _logger.LogInformation("[CLICK COMPLETE] Raw request payload: {Payload}", rawPayload ?? "<empty>");
+        _logger.LogInformation(
+            "[CLICK COMPLETE] Received request: ClickTransId={ClickTransId}, ServiceId={ServiceId}, MerchantTransId={MerchantTransId}, MerchantPrepareId={MerchantPrepareId}, Amount={Amount}, Action={Action}, SignTime={SignTime}, ErrorCode={ErrorCode}",
+            request.ClickTransactionId,
+            request.ServiceId,
+            request.MerchantTransactionId,
+            request.MerchantPrepareId,
+            request.Amount,
+            request.Action,
+            request.SignTime,
+            request.ErrorCode);
+
         var result = await _clickService.CompleteAsync(
             new ClickService.ClickCompleteRequest(
                 request.ClickTransactionId,
@@ -65,17 +111,31 @@ public sealed class PaymentsController : ControllerBase
                 request.Action,
                 request.SignTime,
                 request.SignString,
-                request.ErrorCode),
+                request.ErrorCode,
+                request.AmountRaw,
+                request.SignTimeRaw),
             cancellationToken);
 
-        return Ok(new
+        _logger.LogInformation(
+            "[CLICK COMPLETE] Response: ClickTransId={ClickTransId}, MerchantTransId={MerchantTransId}, ConfirmId={ConfirmId}, Error={Error}, ErrorNote={ErrorNote}",
+            result.ClickTransactionId,
+            result.MerchantTransactionId,
+            result.MerchantConfirmId,
+            result.Error,
+            result.ErrorNote);
+
+        var responsePayload = new
         {
             click_trans_id = result.ClickTransactionId,
             merchant_trans_id = result.MerchantTransactionId,
             merchant_confirm_id = result.MerchantConfirmId,
             error = result.Error,
             error_note = result.ErrorNote
-        });
+        };
+
+        _logger.LogInformation("[CLICK COMPLETE] Response payload: {Payload}", JsonSerializer.Serialize(responsePayload));
+
+        return Ok(responsePayload);
     }
 
     [HttpPost("click/checkout")]
@@ -91,6 +151,285 @@ public sealed class PaymentsController : ControllerBase
 
         return Ok(new { url = result.Url, order_id = result.OrderId });
     }
+
+    /// <summary>
+    /// Helper endpoint for testing: creates a fake Click transaction.
+    /// </summary>
+    [HttpPost("click/fake-transaction")]
+    public async Task<IActionResult> ClickFakeTransactionAsync([FromBody] ClickFakeTransactionRequestDto? request, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var payload = request ?? new ClickFakeTransactionRequestDto();
+
+        var status = payload.Status ?? 0;
+        var createTime = payload.CreateTime ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var performTime = payload.PerformTime ?? 0;
+        var cancelTime = payload.CancelTime ?? 0;
+
+        var transaction = new PaymentTransaction
+        {
+            TransactionId = payload.TransactionId,
+            UserId = payload.UserId,
+            OrderDetailsJson = SerializeOrderDetails(payload.OrderDetails),
+            Status = status,
+            Amount = payload.Amount ?? 0,
+            OrderId = payload.OrderId,
+            CreateTime = createTime,
+            PerformTime = performTime,
+            CancelTime = cancelTime,
+            Reason = payload.Reason,
+            Provider = "click",
+            PrepareId = payload.PrepareId,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _dbContext.Transactions.AddAsync(transaction, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        object? orderDetails = null;
+        if (!string.IsNullOrWhiteSpace(transaction.OrderDetailsJson))
+        {
+            try
+            {
+                orderDetails = JsonSerializer.Deserialize<object>(transaction.OrderDetailsJson);
+            }
+            catch (JsonException)
+            {
+                orderDetails = transaction.OrderDetailsJson;
+            }
+        }
+
+        return Ok(new
+        {
+            transaction.Id,
+            transaction.TransactionId,
+            transaction.UserId,
+            orderDetails,
+            transaction.Status,
+            transaction.Amount,
+            transaction.OrderId,
+            transaction.CreateTime,
+            transaction.PerformTime,
+            transaction.CancelTime,
+            transaction.Reason,
+            transaction.Provider,
+            transaction.PrepareId,
+            transaction.CreatedAt,
+            transaction.UpdatedAt
+        });
+    }
+
+    private async Task<(ClickPrepareRequestDto Request, string? RawPayload)> BindClickPrepareRequestAsync(CancellationToken cancellationToken)
+    {
+        var rawBody = await ReadBodyAsStringAsync(Request, cancellationToken);
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync(cancellationToken);
+            var dtoFromForm = MapClickPrepareFromForm(form);
+            return (dtoFromForm, rawBody ?? SerializeForm(form));
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawBody))
+        {
+            try
+            {
+                var parsed = MapClickPrepareFromJson(rawBody);
+                return (parsed, rawBody);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "[CLICK PREPARE] Failed to parse request body as JSON.");
+            }
+        }
+
+        return (new ClickPrepareRequestDto(), rawBody);
+    }
+
+    private async Task<(ClickCompleteRequestDto Request, string? RawPayload)> BindClickCompleteRequestAsync(CancellationToken cancellationToken)
+    {
+        var rawBody = await ReadBodyAsStringAsync(Request, cancellationToken);
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync(cancellationToken);
+            var dtoFromForm = MapClickCompleteFromForm(form);
+            return (dtoFromForm, rawBody ?? SerializeForm(form));
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawBody))
+        {
+            try
+            {
+                var parsed = MapClickCompleteFromJson(rawBody);
+                return (parsed, rawBody);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "[CLICK COMPLETE] Failed to parse request body as JSON.");
+            }
+        }
+
+        return (new ClickCompleteRequestDto(), rawBody);
+    }
+
+    private static ClickPrepareRequestDto MapClickPrepareFromForm(IFormCollection form)
+    {
+        var amountRaw = GetString(form, "amount");
+        var signTimeRaw = GetString(form, "sign_time");
+
+        return new ClickPrepareRequestDto
+        {
+            ClickTransactionId = GetString(form, "click_trans_id"),
+            ServiceId = GetString(form, "service_id"),
+            MerchantTransactionId = GetString(form, "merchant_trans_id"),
+            AmountRaw = amountRaw,
+            Amount = ParseDecimal(amountRaw),
+            Action = ParseInt(GetString(form, "action")),
+            SignTimeRaw = signTimeRaw,
+            SignTime = ParseLong(signTimeRaw),
+            SignString = GetString(form, "sign_string")
+        };
+    }
+
+    private static ClickCompleteRequestDto MapClickCompleteFromForm(IFormCollection form)
+    {
+        var amountRaw = GetString(form, "amount");
+        var signTimeRaw = GetString(form, "sign_time");
+
+        return new ClickCompleteRequestDto
+        {
+            ClickTransactionId = GetString(form, "click_trans_id"),
+            ServiceId = GetString(form, "service_id"),
+            MerchantTransactionId = GetString(form, "merchant_trans_id"),
+            MerchantPrepareId = GetNullableString(form, "merchant_prepare_id"),
+            AmountRaw = amountRaw,
+            Amount = ParseDecimal(amountRaw),
+            Action = ParseInt(GetString(form, "action")),
+            SignTimeRaw = signTimeRaw,
+            SignTime = ParseLong(signTimeRaw),
+            SignString = GetString(form, "sign_string"),
+            ErrorCode = ParseInt(GetString(form, "error"))
+        };
+    }
+
+    private static ClickPrepareRequestDto MapClickPrepareFromJson(string rawBody)
+    {
+        using var doc = JsonDocument.Parse(rawBody);
+        var root = doc.RootElement;
+
+        var amountRaw = GetRaw(root, "amount");
+        var signTimeRaw = GetRaw(root, "sign_time");
+
+        return new ClickPrepareRequestDto
+        {
+            ClickTransactionId = GetString(root, "click_trans_id"),
+            ServiceId = GetString(root, "service_id"),
+            MerchantTransactionId = GetString(root, "merchant_trans_id"),
+            AmountRaw = amountRaw,
+            Amount = ParseDecimal(amountRaw),
+            Action = ParseInt(GetRaw(root, "action")),
+            SignTimeRaw = signTimeRaw,
+            SignTime = ParseLong(signTimeRaw),
+            SignString = GetString(root, "sign_string")
+        };
+    }
+
+    private static ClickCompleteRequestDto MapClickCompleteFromJson(string rawBody)
+    {
+        using var doc = JsonDocument.Parse(rawBody);
+        var root = doc.RootElement;
+
+        var amountRaw = GetRaw(root, "amount");
+        var signTimeRaw = GetRaw(root, "sign_time");
+
+        return new ClickCompleteRequestDto
+        {
+            ClickTransactionId = GetString(root, "click_trans_id"),
+            ServiceId = GetString(root, "service_id"),
+            MerchantTransactionId = GetString(root, "merchant_trans_id"),
+            MerchantPrepareId = GetNullableString(root, "merchant_prepare_id"),
+            AmountRaw = amountRaw,
+            Amount = ParseDecimal(amountRaw),
+            Action = ParseInt(GetRaw(root, "action")),
+            SignTimeRaw = signTimeRaw,
+            SignTime = ParseLong(signTimeRaw),
+            SignString = GetString(root, "sign_string"),
+            ErrorCode = ParseInt(GetRaw(root, "error"))
+        };
+    }
+
+    private static string SerializeForm(IFormCollection form)
+    {
+        var asDict = form.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+        return JsonSerializer.Serialize(asDict);
+    }
+
+    private static async Task<string?> ReadBodyAsStringAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        request.EnableBuffering();
+        request.Body.Position = 0;
+
+        using var reader = new StreamReader(request.Body, leaveOpen: true);
+        var body = await reader.ReadToEndAsync(cancellationToken);
+        request.Body.Position = 0;
+
+        return body;
+    }
+
+    private static decimal ParseDecimal(StringValues value) =>
+        ParseDecimal(value.ToString());
+
+    private static decimal ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+
+    private static int ParseInt(StringValues value) =>
+        ParseInt(value.ToString());
+
+    private static int ParseInt(string? value) =>
+        int.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+
+    private static long ParseLong(string? value)
+    {
+        if (long.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dateTime))
+        {
+            return dateTime.ToUnixTimeMilliseconds();
+        }
+
+        return 0;
+    }
+
+    private static string GetString(IFormCollection form, string key) =>
+        form.TryGetValue(key, out var value) ? value.ToString() ?? string.Empty : string.Empty;
+
+    private static string? GetNullableString(IFormCollection form, string key) =>
+        form.TryGetValue(key, out var value) ? value.ToString() : null;
+
+    private static string? GetRaw(JsonElement root, string property)
+    {
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(property, out var element))
+        {
+            return null;
+        }
+
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            _ => element.GetRawText()
+        };
+    }
+
+    private static string GetString(JsonElement root, string property) =>
+        GetRaw(root, property) ?? string.Empty;
+
+    private static string? GetNullableString(JsonElement root, string property) =>
+        GetRaw(root, property);
 
     [HttpPost("payme/pay")]
     [PaymeAuthorize]

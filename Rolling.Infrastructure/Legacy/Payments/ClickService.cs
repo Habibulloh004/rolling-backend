@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,6 +6,7 @@ using Rolling.Infrastructure.Configuration;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
+using System.Text.Json;
 
 namespace Rolling.Infrastructure.Payments;
 
@@ -44,9 +45,9 @@ public sealed class ClickService
             request.ServiceId,
             order.Id,
             null,
-            request.Amount,
+            GetAmountForSignature(request),
             request.Action,
-            request.SignTime);
+            GetSignTimeForSignature(request));
 
         if (!_signatureValidator.Validate(signaturePayload, request.SignString))
         {
@@ -115,9 +116,9 @@ public sealed class ClickService
             request.ServiceId,
             order.Id,
             request.MerchantPrepareId,
-            request.Amount,
+            GetAmountForSignature(request),
             request.Action,
-            request.SignTime);
+            GetSignTimeForSignature(request));
 
         if (!_signatureValidator.Validate(signaturePayload, request.SignString))
         {
@@ -192,6 +193,26 @@ public sealed class ClickService
 
         return ClickCompleteResponse.Success(request.ClickTransId, request.MerchantTransId, currentTime.ToString());
     }
+
+    private static string GetSignTimeForSignature(ClickPrepareRequest request) =>
+        !string.IsNullOrWhiteSpace(request.SignTimeRaw)
+            ? request.SignTimeRaw
+            : request.SignTime.ToString(CultureInfo.InvariantCulture);
+
+    private static string GetSignTimeForSignature(ClickCompleteRequest request) =>
+        !string.IsNullOrWhiteSpace(request.SignTimeRaw)
+            ? request.SignTimeRaw
+            : request.SignTime.ToString(CultureInfo.InvariantCulture);
+
+    private static string GetAmountForSignature(ClickPrepareRequest request) =>
+        !string.IsNullOrWhiteSpace(request.AmountRaw)
+            ? request.AmountRaw
+            : request.Amount.ToString(CultureInfo.InvariantCulture);
+
+    private static string GetAmountForSignature(ClickCompleteRequest request) =>
+        !string.IsNullOrWhiteSpace(request.AmountRaw)
+            ? request.AmountRaw
+            : request.Amount.ToString(CultureInfo.InvariantCulture);
 
     public async Task<ClickCheckoutResult> CheckoutAsync(ClickCheckoutRequest request, CancellationToken cancellationToken)
     {
@@ -276,7 +297,9 @@ public sealed class ClickService
         decimal Amount,
         int Action,
         long SignTime,
-        string SignString);
+        string SignString,
+        string? AmountRaw,
+        string? SignTimeRaw);
 
     public sealed record ClickCompleteRequest(
         string ClickTransId,
@@ -287,7 +310,9 @@ public sealed class ClickService
         int Action,
         long SignTime,
         string SignString,
-        int ErrorCode);
+        int ErrorCode,
+        string? AmountRaw,
+        string? SignTimeRaw);
 
     public sealed record ClickCheckoutRequest(
         JsonElement? OrderDetails,

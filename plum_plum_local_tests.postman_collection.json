@@ -1,0 +1,2751 @@
+{
+  "info": {
+    "name": "Rolling Plum Proxy",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Covers all Rolling proxy routes for PLUM Payment Gate."
+  },
+  "item": [
+    {
+      "name": "BranchEpos",
+      "item": [
+        {
+          "name": "GetClientBranches",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/branch-epos/branches?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "branch-epos",
+                "branches"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetBranchEpos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/branch-epos?branchId={{branchId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "branch-epos"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cards",
+      "item": [
+        {
+          "name": "CreateUserCard",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"userId\": \"{{userId}}\",\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"expireDate\": \"{{expireDate}}\",\n      \"userPhone\": \"{{userPhone}}\",\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ConfirmUserCardCreate",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/confirm?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "confirm"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"session\": \"{{session}}\",\n      \"otp\": \"{{otp}}\",\n      \"cardName\": \"Asosiy karta\",\n      \"isTrusted\": 1\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ResendOtp",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/otp?session={{session}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "otp"
+              ],
+              "query": [
+                {
+                  "key": "session",
+                  "value": "{{session}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetAllUserCards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/user?userId={{userId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "user"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "DeleteUserCard",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards?userCardId={{userCardId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards"
+              ],
+              "query": [
+                {
+                  "key": "userCardId",
+                  "value": "{{userCardId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "CheckCardPinfl",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/check-pinfl?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "check-pinfl"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetCardOwnerInfo",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/owner-info?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "owner-info"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardNumber\": \"{{cardNumber}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetUserCardInfo",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/info?userId={{userId}}&cardId={{cardId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "info"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "cardId",
+                  "value": "{{cardId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetUserCardsBalances",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/balances?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "balances"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n      \"{{userCardId1}}\",\n      \"{{userCardId2}}\"\n    ]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetUserCardsBalancesById",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/cards/balances/by-id?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "cards",
+                "balances",
+                "by-id"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n      {\n        \"userId\": \"{{userId}}\",\n        \"cardId\": \"{{cardId}}\"\n      }\n    ]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment",
+      "item": [
+        {
+          "name": "PaymentWithoutRegistration",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/without-registration?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "without-registration"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"expireDate\": \"{{expireDate}}\",\n      \"amount\": 1000,\n      \"extraId\": \"{{extraId}}\",\n      \"transactionData\": \"Test to'lov\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Payment",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"userId\": \"{{userId}}\",\n      \"cardId\": \"{{cardId}}\",\n      \"amount\": 1000,\n      \"extraId\": \"{{extraId}}\",\n      \"transactionData\": \"Test to'lov\",\n      \"sendOtp\": true\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ConfirmPayment",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/confirm?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "confirm"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"session\": \"{{session}}\",\n      \"otp\": \"{{otp}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PaymentReverse",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/reverse?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "reverse"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ReversePartial",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/reverse/partial?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "reverse",
+                "partial"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\",\n      \"reverseAmount\": 100\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetTransactionByExtra",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/by-extra?extraId={{extraId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "by-extra"
+              ],
+              "query": [
+                {
+                  "key": "extraId",
+                  "value": "{{extraId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetTransactions",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/payments/search?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "payments",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"userId\": \"{{userId}}\",\n      \"transactionId\": \"{{transactionId}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"page\": \"{{page}}\",\n      \"count\": \"{{count}}\",\n      \"transactionStatus\": null,\n      \"IsWithRegistration\": null\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Hold",
+      "item": [
+        {
+          "name": "CreateHold",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/hold/create?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "hold",
+                "create"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"userId\": \"{{userId}}\",\n      \"cardId\": \"{{cardId}}\",\n      \"amount\": 1200,\n      \"extraId\": \"{{extraId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ConfirmCreateHold",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/hold/confirm?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "hold",
+                "confirm"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"session\": \"{{session}}\",\n      \"otp\": \"{{otp}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DismissHeldTransaction",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/hold/dismiss?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "hold",
+                "dismiss"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\",\n      \"holdId\": \"{{holdId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ChargeHold",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/hold/charge?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "hold",
+                "charge"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\",\n      \"holdId\": \"{{holdId}}\",\n      \"chargeAmount\": 1000\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fiscal",
+      "item": [
+        {
+          "name": "RegisterFiscal",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/fiscal/register?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "fiscal",
+                "register"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\",\n      \"fiscals\": [\n        {\n          \"fiscalUrl\": \"https://ofd.soliq.uz/epi?t=EP&r=1234&c=20221117114958&s=7\",\n          \"refundType\": 0\n        }\n      ]\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AutoPayment",
+      "item": [
+        {
+          "name": "CreateClient",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/client?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "client"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"userId\": \"{{userId}}\",\n      \"pnfl\": \"{{pinfl}}\",\n      \"lastName\": \"IVANOVA\",\n      \"firstName\": \"GULASAL\",\n      \"middleName\": \"ABDULQOSIM QIZI\",\n      \"birthDate\": \"1998-01-01\",\n      \"passportSeries\": \"AA\",\n      \"passportNumber\": \"1234567\",\n      \"passportIssueDate\": \"2023-01-01\",\n      \"passportExpirationDate\": \"2032-12-31\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateContractWithOtp",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/with-otp?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "with-otp"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"autoPayClientId\": \"{{autoPayClientId}}\",\n      \"expiry\": \"2026-12-31\",\n      \"amount\": 1000000,\n      \"extraId\": \"{{contractExtraId}}\",\n      \"description\": \"Bo'lib to'lash shartnomasi\",\n      \"creditNumber\": \"CN_1012\",\n      \"phoneNumber\": \"{{userPhone}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ConfirmCreatedContract",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/confirm?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "confirm"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"extraId\": \"{{contractExtraId}}\",\n      \"session\": \"{{contractSession}}\",\n      \"otp\": \"{{otp}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ContractPayment",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/payment?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "payment"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"autoPayContractId\": \"{{autoPayContractId}}\",\n      \"amount\": 50000,\n      \"extraId\": \"{{extraId}}\",\n      \"transactionData\": \"Kontrakt bo'yicha yechish\",\n      \"isToDebitFullAmount\": true,\n      \"minAmount\": 1000\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ContractPaymentCompletionStatus",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/payment-status?extraId={{extraId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "payment-status"
+              ],
+              "query": [
+                {
+                  "key": "extraId",
+                  "value": "{{extraId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ContractPaymentReverse",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/payment/reverse?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "payment",
+                "reverse"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"extraId\": \"{{extraId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ContractFullPayment",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/payment/full?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "payment",
+                "full"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"autoPayContractId\": \"{{autoPayContractId}}\",\n      \"amount\": 50000,\n      \"extraId\": \"{{extraId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "UpdateClientUzcardCards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/client/uzcard-refresh?autoPayClientId={{autoPayClientId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "client",
+                "uzcard-refresh"
+              ],
+              "query": [
+                {
+                  "key": "autoPayClientId",
+                  "value": "{{autoPayClientId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CheckUpdateCards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/cards/update-status?jobId={{jobId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "cards",
+                "update-status"
+              ],
+              "query": [
+                {
+                  "key": "jobId",
+                  "value": "{{jobId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CancelContract",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/cancel?autoPayContractId={{autoPayContractId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "cancel"
+              ],
+              "query": [
+                {
+                  "key": "autoPayContractId",
+                  "value": "{{autoPayContractId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetClient",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/client?userId={{userId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "client"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetContract",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract?autoPayContractId={{autoPayContractId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract"
+              ],
+              "query": [
+                {
+                  "key": "autoPayContractId",
+                  "value": "{{autoPayContractId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetContractTransactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contract/transactions?autoPayContractId={{autoPayContractId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contract",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "autoPayContractId",
+                  "value": "{{autoPayContractId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetContracts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/contracts?userId={{userId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "contracts"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "UpdateClientHumoCards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/auto-payment/client/humo-refresh?autoPayClientId={{autoPayClientId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "auto-payment",
+                "client",
+                "humo-refresh"
+              ],
+              "query": [
+                {
+                  "key": "autoPayClientId",
+                  "value": "{{autoPayClientId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Scoring",
+      "item": [
+        {
+          "name": "ConfirmCreateScoring",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/confirm?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "confirm"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"session\": \"{{session}}\",\n      \"otp\": \"{{otp}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateHumoScoringCardsByPersonCodeByCard",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/by-card?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "by-card"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"phoneNumber\": \"{{phoneNumber}}\",\n      \"personCode\": \"{{personCode}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateHumoScoringCardsByPersonCodeByCardSummary",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/by-card-summary?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "by-card-summary"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"phoneNumber\": \"{{phoneNumber}}\",\n      \"personCode\": \"{{personCode}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateHumoScoringCardsByPersonCodeSummary",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/summary?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"phoneNumber\": \"{{phoneNumber}}\",\n      \"personCode\": \"{{personCode}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateHumoScoringCardsByPersonCodeTotalSummary",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/total-summary?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "total-summary"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"phoneNumber\": \"{{phoneNumber}}\",\n      \"personCode\": \"{{personCode}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateScoringByPersonCodeByCard",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/by-card?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "by-card"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"personCode\": \"{{personCode}}\",\n      \"templateId\": \"{{templateId}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"phoneNumber\": \"{{phoneNumber}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreateScoringByPersonCodeSummary",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/summary?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"personCode\": \"{{personCode}}\",\n      \"templateId\": \"{{templateId}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"phoneNumber\": \"{{phoneNumber}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetEbDebtScore",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/eb-debt?pinfl={{pinfl}}&phone={{phone}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "eb-debt"
+              ],
+              "query": [
+                {
+                  "key": "pinfl",
+                  "value": "{{pinfl}}"
+                },
+                {
+                  "key": "phone",
+                  "value": "{{phone}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetHumoScoringCardsByPersonCodeByCard",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/by-card?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "by-card"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetHumoScoringCardsByPersonCodeByCardSummary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/by-card-summary?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "by-card-summary"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetHumoScoringCardsByPersonCodeSummary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/summary?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetHumoScoringCardsByPersonCodeTotalSummary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/total-summary?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "total-summary"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetScoringByPersonCodeByCard",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/by-card/{{scoringId}}?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "by-card",
+                "{{scoringId}}"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetScoringByPersonCodeSummary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/summary/{{scoringId}}?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "summary",
+                "{{scoringId}}"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetTaxDebtScore",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/tax-debt?pinfl={{pinfl}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "tax-debt"
+              ],
+              "query": [
+                {
+                  "key": "pinfl",
+                  "value": "{{pinfl}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "HumoScoring",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"startDate\": \"{{startDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "HumoScoringAvg",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/avg?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "avg"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"startDate\": \"{{startDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "HumoScoringMonth",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/humo/month?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "humo",
+                "month"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"startDate\": \"{{startDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"amount\": \"{{amount}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "createScoringAmount",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/amount?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "amount"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"templateId\": \"{{templateId}}\",\n      \"amount\": \"{{amount}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "createScoringCard",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/card?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "card"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardId\": \"{{cardId}}\",\n      \"templateId\": \"{{templateId}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "scoringGetMonth",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/month?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "month"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "scoringGetPoint",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/scoring/point?scoringId={{scoringId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "scoring",
+                "point"
+              ],
+              "query": [
+                {
+                  "key": "scoringId",
+                  "value": "{{scoringId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Credit",
+      "item": [
+        {
+          "name": "Credit",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"amount\": \"{{amount}}\",\n      \"extraId\": \"{{extraId}}\",\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"transactionData\": \"{{transactionData}}\",\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "CreditToSelfEmployed",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/self-employed?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "self-employed"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"amount\": \"{{amount}}\",\n      \"extraId\": \"{{extraId}}\",\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"transactionData\": \"{{transactionData}}\",\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetCreditTransactionByData",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/by-data?transactionId={{transactionId}}&extraId={{extraId}}&language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "by-data"
+              ],
+              "query": [
+                {
+                  "key": "transactionId",
+                  "value": "{{transactionId}}"
+                },
+                {
+                  "key": "extraId",
+                  "value": "{{extraId}}"
+                },
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetCreditTransactions",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/search?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"extraId\": \"{{extraId}}\",\n      \"cardId\": \"{{cardId}}\",\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"transactionId\": \"{{transactionId}}\",\n      \"terminalId\": null,\n      \"merchantId\": null,\n      \"transactionData\": \"{{transactionData}}\",\n      \"utrNo\": \"{{utrNo}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"page\": \"{{page}}\",\n      \"count\": \"{{count}}\",\n      \"transactionStatus\": null,\n      \"isAll\": true,\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetCreditTransactionsExcel",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/search/excel?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "search",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"extraId\": \"{{extraId}}\",\n      \"cardId\": \"{{cardId}}\",\n      \"cardNumber\": \"{{cardNumber}}\",\n      \"transactionId\": \"{{transactionId}}\",\n      \"terminalId\": null,\n      \"merchantId\": null,\n      \"transactionData\": \"{{transactionData}}\",\n      \"utrNo\": \"{{utrNo}}\",\n      \"beginDate\": \"{{beginDate}}\",\n      \"endDate\": \"{{endDate}}\",\n      \"page\": \"{{page}}\",\n      \"count\": \"{{count}}\",\n      \"transactionStatus\": null,\n      \"isAll\": true,\n      \"pinfl\": \"{{pinfl}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ReverseCredit",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/reverse?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "reverse"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"transactionId\": \"{{transactionId}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GetCreditCardOwnerInfo",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/plum/credit/card-owner?language={{language}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plum",
+                "credit",
+                "card-owner"
+              ],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "{{language}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n      \"cardNumber\": \"{{cardNumber}}\"\n    }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5020"
+    },
+    {
+      "key": "language",
+      "value": "uz"
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "cardNumber",
+      "value": ""
+    },
+    {
+      "key": "expireDate",
+      "value": ""
+    },
+    {
+      "key": "userPhone",
+      "value": ""
+    },
+    {
+      "key": "pinfl",
+      "value": ""
+    },
+    {
+      "key": "session",
+      "value": ""
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "cardId",
+      "value": ""
+    },
+    {
+      "key": "userCardId",
+      "value": ""
+    },
+    {
+      "key": "userCardId1",
+      "value": ""
+    },
+    {
+      "key": "userCardId2",
+      "value": ""
+    },
+    {
+      "key": "extraId",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
+      "value": ""
+    },
+    {
+      "key": "reverseAmount",
+      "value": ""
+    },
+    {
+      "key": "holdId",
+      "value": ""
+    },
+    {
+      "key": "chargeAmount",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "autoPayClientId",
+      "value": ""
+    },
+    {
+      "key": "autoPayContractId",
+      "value": ""
+    },
+    {
+      "key": "contractExtraId",
+      "value": ""
+    },
+    {
+      "key": "contractSession",
+      "value": ""
+    },
+    {
+      "key": "templateId",
+      "value": ""
+    },
+    {
+      "key": "beginDate",
+      "value": ""
+    },
+    {
+      "key": "endDate",
+      "value": ""
+    },
+    {
+      "key": "startDate",
+      "value": ""
+    },
+    {
+      "key": "amount",
+      "value": ""
+    },
+    {
+      "key": "scoringId",
+      "value": ""
+    },
+    {
+      "key": "phone",
+      "value": ""
+    },
+    {
+      "key": "phoneNumber",
+      "value": ""
+    },
+    {
+      "key": "personCode",
+      "value": ""
+    },
+    {
+      "key": "transactionData",
+      "value": ""
+    },
+    {
+      "key": "utrNo",
+      "value": ""
+    },
+    {
+      "key": "page",
+      "value": ""
+    },
+    {
+      "key": "count",
+      "value": ""
+    }
+  ]
+}
