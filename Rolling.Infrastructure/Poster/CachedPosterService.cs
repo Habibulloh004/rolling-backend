@@ -8,6 +8,7 @@ public interface ICachedPosterService
 {
     Task<CachedResponse<JsonDocument?>> GetProductsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> GetCategoriesAsync(CancellationToken cancellationToken = default);
+    Task<CachedResponse<JsonDocument?>> GetPromotionsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> GetClientsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> GetClientAsync(string clientId, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> GetClientGroupsAsync(CancellationToken cancellationToken = default);
@@ -23,6 +24,7 @@ public interface ICachedPosterService
     Task<CachedResponse<JsonDocument?>> RevalidateProductsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateAllProductsAsync(CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateCategoriesAsync(CancellationToken cancellationToken = default);
+    Task<CachedResponse<JsonDocument?>> RevalidatePromotionsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateClientsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateClientAsync(string clientId, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateClientGroupsAsync(CancellationToken cancellationToken = default);
@@ -116,6 +118,16 @@ public class CachedPosterService : ICachedPosterService
         return FetchWithCacheAsync(
             cacheKey,
             () => _posterService.GetCategoriesAsync(cancellationToken));
+    }
+
+    public Task<CachedResponse<JsonDocument?>> GetPromotionsAsync(
+        Dictionary<string, string?>? queryParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        var cacheKey = $"poster:promotions:{BuildQueryKey(queryParams)}";
+        return FetchWithCacheAsync(
+            cacheKey,
+            () => _posterService.GetPromotionsAsync(queryParams, cancellationToken));
     }
 
     // ===== CLIENT ENDPOINTS =====
@@ -250,18 +262,44 @@ public class CachedPosterService : ICachedPosterService
         return await GetCategoriesAsync(cancellationToken);
     }
 
+    public async Task<CachedResponse<JsonDocument?>> RevalidatePromotionsAsync(
+        Dictionary<string, string?>? queryParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (queryParams == null || queryParams.Count == 0)
+        {
+            _cacheService.DeleteByPattern("poster:promotions:*");
+        }
+        else
+        {
+            var cacheKey = $"poster:promotions:{BuildQueryKey(queryParams)}";
+            _cacheService.Delete(cacheKey);
+        }
+
+        _logger.LogInformation("🔄 Revalidating promotions...");
+        return await GetPromotionsAsync(queryParams, cancellationToken);
+    }
+
     public async Task<CachedResponse<JsonDocument?>> RevalidateClientsAsync(
         Dictionary<string, string?>? queryParams = null,
         CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"poster:clients:{BuildQueryKey(queryParams)}";
-        _cacheService.Delete(cacheKey);
+        if (queryParams == null || queryParams.Count == 0)
+        {
+            _cacheService.DeleteByPattern("poster:clients:*");
+        }
+        else
+        {
+            var cacheKey = $"poster:clients:{BuildQueryKey(queryParams)}";
+            _cacheService.Delete(cacheKey);
+        }
         _logger.LogInformation("🔄 Revalidating clients...");
         return await GetClientsAsync(queryParams, cancellationToken);
     }
 
     public async Task<CachedResponse<JsonDocument?>> RevalidateClientAsync(string clientId, CancellationToken cancellationToken = default)
     {
+        _cacheService.DeleteByPattern("poster:clients:*");
         _cacheService.Delete($"poster:client:{clientId}");
         _logger.LogInformation("🔄 Revalidating client {ClientId}...", clientId);
         return await GetClientAsync(clientId, cancellationToken);

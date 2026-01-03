@@ -1,0 +1,278 @@
+{
+  "orders": [
+    {
+      "spotId": "1",
+      "phone": "+998901234567",
+      "alternatePhone": "+998901234568",
+      "firstName": "Aziz",
+      "lastName": "Karimov",
+      "address": "Tashkent, Chilanzar district, Block 5, House 12, Apt 45",
+      "comment": "Please call before delivery",
+      "deliveryPrice": 15000,
+      "paymentMethodId": "1",
+      "serviceMode": 3,
+      "deliveryLatitude": 41.311081,
+      "deliveryLongitude": 69.240562,
+      "deliveryAddressComment": "Near the blue gate, 3rd floor",
+      "subtotal": 125000,
+      "discount": 10000,
+      "total": 130000,
+      "branchId": "branch-001",
+      "branchName": "Rolling Chilanzar",
+      "branchAddress": "Chilanzar, Block 1",
+      "branchPhone": "+998712345678",
+      "cutleryQuantity": 2,
+      "napkinsQuantity": 4,
+      "products": [
+        {
+          "productId": "prod-001",
+          "name": "Margherita Pizza",
+          "count": 2,
+          "price": 45000,
+          "totalPrice": 90000,
+          "modifiers": "Large, Extra cheese",
+          "modificatorId": "mod-001",
+          "imageUrl": "https://example.com/images/margherita.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-002",
+          "name": "Caesar Salad",
+          "count": 1,
+          "price": 35000,
+          "totalPrice": 35000,
+          "imageUrl": "https://example.com/images/caesar.jpg",
+          "isGift": false
+        }
+      ],
+      "promotions": []
+    },
+    {
+      "spotId": "2",
+      "phone": "+998909876543",
+      "firstName": "Dilnoza",
+      "lastName": "Rahimova",
+      "address": "Tashkent, Sergeli district, Yangi Sergeli, House 8",
+      "deliveryPrice": 20000,
+      "paymentMethodId": "2",
+      "serviceMode": 3,
+      "deliveryLatitude": 41.225556,
+      "deliveryLongitude": 69.218889,
+      "deliveryAddressComment": "White building with green roof",
+      "subtotal": 210000,
+      "discount": 0,
+      "total": 230000,
+      "branchId": "branch-002",
+      "branchName": "Rolling Sergeli",
+      "branchAddress": "Sergeli, Main Street 15",
+      "branchPhone": "+998712345679",
+      "loyaltyPointsUsed": 5000,
+      "promoCode": "SUMMER20",
+      "promoDiscountAmount": 42000,
+      "promoDiscountPercentage": 20.0,
+      "userId": "user-12345",
+      "userOrderCount": 15,
+      "cutleryQuantity": 4,
+      "products": [
+        {
+          "productId": "prod-003",
+          "name": "Pepperoni Pizza",
+          "count": 1,
+          "price": 55000,
+          "totalPrice": 55000,
+          "modifiers": "Medium",
+          "modificatorId": "mod-002",
+          "imageUrl": "https://example.com/images/pepperoni.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-004",
+          "name": "BBQ Chicken Wings",
+          "count": 2,
+          "price": 40000,
+          "totalPrice": 80000,
+          "imageUrl": "https://example.com/images/wings.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-005",
+          "name": "Coca-Cola 1L",
+          "count": 2,
+          "price": 12000,
+          "totalPrice": 24000,
+          "imageUrl": "https://example.com/images/cola.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-006",
+          "name": "Garlic Bread",
+          "count": 1,
+          "price": 0,
+          "totalPrice": 0,
+          "imageUrl": "https://example.com/images/garlic-bread.jpg",
+          "isGift": true,
+          "priceOverride": 0
+        }
+      ],
+      "promotions": [
+        {
+          "id": "promo-001",
+          "involvedProducts": [
+            {
+              "id": "prod-003",
+              "count": 1
+            }
+          ],
+          "resultProducts": [
+            {
+              "id": "prod-006",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "spotId": "1",
+      "phone": "+998933334455",
+      "firstName": "Sardor",
+      "lastName": "Umarov",
+      "address": "Tashkent, Mirzo Ulugbek district, Buyuk Ipak Yuli 45",
+      "deliveryPrice": 12000,
+      "paymentMethodId": "2",
+      "serviceMode": 3,
+      "deliveryLatitude": 41.339722,
+      "deliveryLongitude": 69.334722,
+      "subtotal": 75000,
+      "discount": 0,
+      "total": 87000,
+      "branchId": "branch-001",
+      "branchName": "Rolling Chilanzar",
+      "branchAddress": "Chilanzar, Block 1",
+      "branchPhone": "+998712345678",
+      "savedCardToken": "card_token_abc123",
+      "products": [
+        {
+          "productId": "prod-007",
+          "name": "Cheeseburger",
+          "count": 2,
+          "price": 28000,
+          "totalPrice": 56000,
+          "modifiers": "No onions, Extra pickles",
+          "modificatorId": "mod-003",
+          "imageUrl": "https://example.com/images/cheeseburger.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-008",
+          "name": "French Fries",
+          "count": 1,
+          "price": 19000,
+          "totalPrice": 19000,
+          "modifiers": "Large",
+          "imageUrl": "https://example.com/images/fries.jpg",
+          "isGift": false
+        }
+      ]
+    },
+    {
+      "spotId": "3",
+      "phone": "+998977778899",
+      "firstName": "Malika",
+      "lastName": "Nazarova",
+      "address": "Tashkent, Yunusabad district, Amir Temur street 100",
+      "comment": "Leave at the door",
+      "deliveryPrice": 18000,
+      "paymentMethodId": "1",
+      "serviceMode": 3,
+      "deliveryLatitude": 41.365278,
+      "deliveryLongitude": 69.285833,
+      "deliveryAddressComment": "Apartment complex 'Yunusabad Plaza', entrance B",
+      "deliveryInstructions": "Ring doorbell twice",
+      "subtotal": 320000,
+      "discount": 32000,
+      "total": 306000,
+      "branchId": "branch-003",
+      "branchName": "Rolling Yunusabad",
+      "branchAddress": "Yunusabad, Block 7",
+      "branchPhone": "+998712345680",
+      "promoCode": "NEWUSER",
+      "promoDiscountAmount": 32000,
+      "promoDiscountPercentage": 10.0,
+      "userId": "user-67890",
+      "userOrderCount": 1,
+      "cutleryQuantity": 6,
+      "napkinsQuantity": 10,
+      "products": [
+        {
+          "productId": "prod-009",
+          "name": "Family Pizza Combo",
+          "count": 1,
+          "price": 180000,
+          "totalPrice": 180000,
+          "modifiers": "2x Margherita + 2x Pepperoni",
+          "imageUrl": "https://example.com/images/family-combo.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-010",
+          "name": "Tiramisu",
+          "count": 4,
+          "price": 25000,
+          "totalPrice": 100000,
+          "imageUrl": "https://example.com/images/tiramisu.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-011",
+          "name": "Fresh Orange Juice 1L",
+          "count": 2,
+          "price": 20000,
+          "totalPrice": 40000,
+          "imageUrl": "https://example.com/images/orange-juice.jpg",
+          "isGift": false
+        }
+      ]
+    },
+    {
+      "spotId": "2",
+      "phone": "+998905551122",
+      "firstName": "Bekzod",
+      "lastName": "Toshmatov",
+      "address": "Tashkent, Bektemir district, Navoi street 22",
+      "deliveryPrice": 25000,
+      "paymentMethodId": "2",
+      "serviceMode": 3,
+      "deliveryLatitude": 41.268889,
+      "deliveryLongitude": 69.361111,
+      "subtotal": 95000,
+      "discount": 0,
+      "total": 120000,
+      "branchId": "branch-002",
+      "branchName": "Rolling Sergeli",
+      "branchAddress": "Sergeli, Main Street 15",
+      "branchPhone": "+998712345679",
+      "scheduledDeliveryTime": "2025-12-29T19:30:00Z",
+      "products": [
+        {
+          "productId": "prod-012",
+          "name": "Mushroom Risotto",
+          "count": 2,
+          "price": 38000,
+          "totalPrice": 76000,
+          "imageUrl": "https://example.com/images/risotto.jpg",
+          "isGift": false
+        },
+        {
+          "productId": "prod-013",
+          "name": "Minestrone Soup",
+          "count": 1,
+          "price": 19000,
+          "totalPrice": 19000,
+          "imageUrl": "https://example.com/images/minestrone.jpg",
+          "isGift": false
+        }
+      ]
+    }
+  ]
+}

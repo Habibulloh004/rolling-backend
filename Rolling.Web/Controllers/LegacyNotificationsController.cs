@@ -127,7 +127,10 @@ public sealed class PushNotificationsController : ControllerBase
         // Unsubscribe from the old language-specific topic before subscribing to the new one
         var oldLanguage = entry.Language;
         _tokenStore.AddOrUpdate(request.DeviceToken, entry with { Language = request.Language });
-        await _notificationService.UnsubscribeAsync(request.DeviceToken, oldLanguage, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(oldLanguage) && NotificationService.IsLanguageSupported(oldLanguage))
+        {
+            await _notificationService.UnsubscribeAsync(request.DeviceToken, oldLanguage, cancellationToken);
+        }
         await _notificationService.SubscribeAsync(request.DeviceToken, request.Language, cancellationToken);
         return Ok(new { success = true });
     }
@@ -138,7 +141,10 @@ public sealed class PushNotificationsController : ControllerBase
         if (_tokenStore.TryGet(request.DeviceToken, out var entry))
         {
             // Use the stored language to remove language-specific subscriptions
-            await _notificationService.UnsubscribeAsync(request.DeviceToken, entry.Language, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(entry.Language) && NotificationService.IsLanguageSupported(entry.Language))
+            {
+                await _notificationService.UnsubscribeAsync(request.DeviceToken, entry.Language, cancellationToken);
+            }
         }
 
         _tokenStore.Remove(request.DeviceToken);

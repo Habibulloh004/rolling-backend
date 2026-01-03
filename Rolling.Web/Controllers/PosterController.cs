@@ -109,6 +109,52 @@ public class PosterController : ControllerBase
         }
     }
 
+    // ===== PROMOTION ENDPOINTS =====
+
+    /// <summary>
+    /// GET /api/poster/promotions
+    /// Get promotions (cached)
+    /// </summary>
+    [HttpGet("promotions")]
+    public async Task<IActionResult> GetPromotions([FromQuery] Dictionary<string, string?>? queryParams, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _posterService.GetPromotionsAsync(queryParams, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting promotions");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// POST /api/poster/promotions/revalidate
+    /// Revalidate promotions cache
+    /// </summary>
+    [HttpPost("promotions/revalidate")]
+    public async Task<IActionResult> RevalidatePromotions([FromQuery] Dictionary<string, string?>? queryParams, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _posterService.RevalidatePromotionsAsync(queryParams, cancellationToken);
+            return Ok(new
+            {
+                message = "Promotions cache revalidated",
+                data = result.Data,
+                source = result.Source,
+                cached = result.Cached
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error revalidating promotions");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     // ===== CLIENT ENDPOINTS =====
 
     /// <summary>

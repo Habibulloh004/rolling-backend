@@ -99,6 +99,9 @@ public static class DependencyInjection
         // Redis Banner Cache
         services.AddSingleton<Rolling.Infrastructure.Persistence.Redis.IRedisBannerCache, Rolling.Infrastructure.Persistence.Redis.RedisBannerCache>();
 
+        // Redis Branch Config Cache
+        services.AddSingleton<Rolling.Infrastructure.Persistence.Redis.IRedisBranchConfigCache, Rolling.Infrastructure.Persistence.Redis.RedisBranchConfigCache>();
+
         // In-Memory Cache Service (for Poster API)
         services.AddSingleton<Rolling.Infrastructure.Persistence.Memory.IInMemoryCacheService>(provider =>
         {

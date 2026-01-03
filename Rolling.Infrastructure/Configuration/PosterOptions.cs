@@ -10,12 +10,6 @@ public sealed class PosterOptions
 
     public string Token { get; init; } = GetEnv("PAST");
 
-    public string EmployeeBaseUrl { get; init; } = GetEnv("EMPLOYEE");
-
-    public string SpotsBaseUrl { get; init; } = GetEnv("SPOTS");
-
-    public string SpotsToken { get; init; } = GetEnv("TOKENSUSHI");
-
     public string OrdersBackendUrl { get; init; } = GetEnv("BACKEND_URL");
 
     public string AlternateOrdersUrl { get; init; } = GetEnv("AURL");

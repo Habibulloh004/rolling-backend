@@ -32,6 +32,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<WebSocketConnectionManager>();
 builder.Services.AddSingleton<ChatRealtimeCoordinator>();
 builder.Services.AddScoped<ChatSocketHandler>();
+builder.Services.AddScoped<PosterUpdatesSocketHandler>();
 builder.Services.AddHostedService<NotificationCleanupService>();
 builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
@@ -70,7 +71,16 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Only redirect to HTTPS if an HTTPS port is configured; avoid redirect loops to an unused port.
+var httpsPort = app.Configuration.GetValue<int?>("Host:HttpsPort");
+if (httpsPort is > 0)
+{
+    app.UseHttpsRedirection();
+}
+else
+{
+    app.Logger.LogInformation("HTTPS redirection disabled (no Host:HttpsPort configured).");
+}
 app.UseStaticFiles();
 
 app.UseSwagger();
@@ -91,6 +101,15 @@ app.Map("/ws/chat", builder =>
     builder.Run(async context =>
     {
         var handler = context.RequestServices.GetRequiredService<ChatSocketHandler>();
+        await handler.HandleAsync(context);
+    });
+});
+
+app.Map("/ws/poster-updates", builder =>
+{
+    builder.Run(async context =>
+    {
+        var handler = context.RequestServices.GetRequiredService<PosterUpdatesSocketHandler>();
         await handler.HandleAsync(context);
     });
 });

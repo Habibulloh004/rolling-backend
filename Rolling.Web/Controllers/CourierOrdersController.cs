@@ -120,7 +120,7 @@ public sealed class CourierOrdersController : ControllerBase
         }
 
         var pattern = $"%\"transaction_comment\":\"{EscapeLikePattern(request.Comment)}\"%";
-        var deleted = await _dbContext.Orders
+        var deleted = await _dbContext.CourierOrders
             .Where(order => order.OrderDataJson != null && EF.Functions.ILike(order.OrderDataJson!, pattern, "\\"))
             .ExecuteDeleteAsync(cancellationToken);
 
@@ -137,7 +137,7 @@ public sealed class CourierOrdersController : ControllerBase
     [HttpGet("getOrders/{id}")]
     public async Task<IActionResult> GetCourierOrdersAsync(long id, CancellationToken cancellationToken)
     {
-        var orders = await _dbContext.Orders
+        var orders = await _dbContext.CourierOrders
             .AsNoTracking()
             .Where(order => order.CourierId == id)
             .ToListAsync(cancellationToken);
@@ -183,7 +183,7 @@ public sealed class CourierOrdersController : ControllerBase
         }
 
         var status = statusElement.GetString() ?? "waiting";
-        var updated = await _dbContext.Orders
+        var updated = await _dbContext.CourierOrders
             .Where(order => order.OrderId == orderId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(order => order.Status, status), cancellationToken);
 
@@ -193,7 +193,7 @@ public sealed class CourierOrdersController : ControllerBase
     [HttpDelete("deleteOrder/{orderId}")]
     public async Task<IActionResult> DeleteOrderAsync(string orderId, CancellationToken cancellationToken)
     {
-        var deleted = await _dbContext.Orders
+        var deleted = await _dbContext.CourierOrders
             .Where(order => order.OrderId == orderId)
             .ExecuteDeleteAsync(cancellationToken);
 
@@ -203,7 +203,7 @@ public sealed class CourierOrdersController : ControllerBase
     [HttpDelete("deleteOrders/{clientId}")]
     public async Task<IActionResult> DeleteCourierOrdersAsync(long clientId, CancellationToken cancellationToken)
     {
-        var deleted = await _dbContext.Orders
+        var deleted = await _dbContext.CourierOrders
             .Where(order => order.CourierId == clientId)
             .ExecuteDeleteAsync(cancellationToken);
 
@@ -213,7 +213,7 @@ public sealed class CourierOrdersController : ControllerBase
     [HttpGet("findOrder/{orderId}")]
     public async Task<IActionResult> FindOrderAsync(string orderId, CancellationToken cancellationToken)
     {
-        var order = await _dbContext.Orders
+        var order = await _dbContext.CourierOrders
             .AsNoTracking()
             .FirstOrDefaultAsync(entity => entity.OrderId == orderId, cancellationToken);
 
@@ -222,7 +222,7 @@ public sealed class CourierOrdersController : ControllerBase
 
     private async Task<CourierOrder?> CreateOrderFromTransactionAsync(string transactionId, long? fallbackCourierId, CancellationToken cancellationToken)
     {
-        var existing = await _dbContext.Orders
+        var existing = await _dbContext.CourierOrders
             .AsNoTracking()
             .FirstOrDefaultAsync(order => order.OrderId == transactionId, cancellationToken);
 
@@ -255,7 +255,7 @@ public sealed class CourierOrdersController : ControllerBase
 
         if (!string.Equals(orderId, transactionId, StringComparison.Ordinal))
         {
-            var duplicate = await _dbContext.Orders
+            var duplicate = await _dbContext.CourierOrders
                 .AsNoTracking()
                 .FirstOrDefaultAsync(order => order.OrderId == orderId, cancellationToken);
 
@@ -285,7 +285,7 @@ public sealed class CourierOrdersController : ControllerBase
             Status = "waiting"
         };
 
-        await _dbContext.Orders.AddAsync(entity, cancellationToken);
+        await _dbContext.CourierOrders.AddAsync(entity, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return entity;
     }
