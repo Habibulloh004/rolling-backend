@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: rolling-backend:latest
+    container_name: rolling_api
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -12,8 +13,9 @@ services:
       Host__BindAddress: 0.0.0.0
       Host__HttpPort: 5020
       Host__HttpsPort: 0
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     ports:
-      - "5020:5020"
+      - "127.0.0.1:5020:5020"   # <-- nginx uchun faqat localhost
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,16 +23,18 @@ services:
         condition: service_healthy
     volumes:
       - uploads:/app/wwwroot/uploads
+    networks:
+      - internal
 
   postgres:
     image: postgres:16-alpine
+    container_name: rolling_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: rolling
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: rolling2024db
-    ports:
-      - "5432:5432"
+    # ports: olib tashlandi (tashqariga ochilmasin)
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -38,13 +42,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - internal
 
   redis:
     image: redis:7-alpine
+    container_name: rolling_redis
     restart: unless-stopped
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
-    ports:
-      - "6379:6379"
+    # ports: olib tashlandi (tashqariga ochilmasin)
     volumes:
       - redis-data:/data
     healthcheck:
@@ -52,8 +58,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - internal
 
 volumes:
   postgres-data:
   redis-data:
   uploads:
+
+networks:
+  internal:
+    driver: bridge
