@@ -1,0 +1,59 @@
+services:
+  rolling-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rolling-backend:latest
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Postgres__ConnectionString: Host=postgres;Port=5432;Database=rolling;Username=postgres;Password=rolling2024db
+      Redis__ConnectionString: redis:6379,abortConnect=false
+      Host__BindAddress: 0.0.0.0
+      Host__HttpPort: 5020
+      Host__HttpsPort: 0
+    ports:
+      - "5020:5020"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/wwwroot/uploads
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rolling
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: rolling2024db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rolling"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:

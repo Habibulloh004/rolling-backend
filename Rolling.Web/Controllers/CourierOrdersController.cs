@@ -7,6 +7,7 @@ using Rolling.Infrastructure.Poster;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Web.Models.Poster;
+using Rolling.Web.Services.Webhooks;
 
 namespace Rolling.Web.Controllers;
 
@@ -19,15 +20,18 @@ public sealed class CourierOrdersController : ControllerBase
 
     private readonly AppDbContext _dbContext;
     private readonly PosterService _posterService;
+    private readonly PosterTransactionWebhookHandler _transactionWebhookHandler;
     private readonly ILogger<CourierOrdersController> _logger;
 
     public CourierOrdersController(
         AppDbContext dbContext,
         PosterService posterService,
+        PosterTransactionWebhookHandler transactionWebhookHandler,
         ILogger<CourierOrdersController> logger)
     {
         _dbContext = dbContext;
         _posterService = posterService;
+        _transactionWebhookHandler = transactionWebhookHandler;
         _logger = logger;
     }
 
@@ -35,9 +39,15 @@ public sealed class CourierOrdersController : ControllerBase
     public async Task<IActionResult> HandlePosterWebhookAsync([FromBody] PosterWebhookRequest request, CancellationToken cancellationToken)
     {
         using var payload = ParsePayload(request.Data);
-        if (payload is null || string.IsNullOrWhiteSpace(request.ObjectId))
+        var objectId = request.ObjectIdValue;
+        if (payload is null || string.IsNullOrWhiteSpace(objectId))
         {
             return Ok(new { success = true });
+        }
+
+        if (PosterTransactionWebhookParser.TryParseFromData(objectId, payload.RootElement, out var update))
+        {
+            await _transactionWebhookHandler.HandleAsync(update, cancellationToken);
         }
 
         if (!ShouldProcessWebhook(payload.RootElement))
@@ -45,7 +55,7 @@ public sealed class CourierOrdersController : ControllerBase
             return Ok(new { success = true });
         }
 
-        var transactionId = request.ObjectId;
+        var transactionId = objectId;
         if (!ActiveTransactions.TryAdd(transactionId, 0))
         {
             _logger.LogInformation("Transaction {TransactionId} is already being processed.", transactionId);
@@ -364,16 +374,6 @@ public sealed class CourierOrdersController : ControllerBase
             else
             {
                 node["products_name"] = new JsonArray();
-            }
-        }
-
-        var comment = node["transaction_comment"]?.GetValue<string>();
-        if (!string.IsNullOrWhiteSpace(comment))
-        {
-            using var backOrderDoc = await _posterService.GetAlternateOrderAsync(comment, cancellationToken);
-            if (backOrderDoc is not null)
-            {
-                node["backOrder"] = JsonNode.Parse(backOrderDoc.RootElement.GetRawText());
             }
         }
 

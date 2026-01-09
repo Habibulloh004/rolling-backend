@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -327,37 +326,6 @@ public sealed class PosterService
         return formData;
     }
 
-    public async Task<JsonDocument?> CreateAbduganiOrderAsync(JsonElement payload, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(_options.OrdersBackendUrl))
-        {
-            _logger.LogWarning("Orders backend url is not configured.");
-            return null;
-        }
-
-        var response = await _httpClient.PostAsJsonAsync(_options.OrdersBackendUrl.TrimEnd('/') + "/add_order", payload, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Failed to create Abdugani order: {StatusCode}", response.StatusCode);
-            return null;
-        }
-
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(content) ? "{}" : content);
-    }
-
-    private async Task<JsonDocument?> PostJsonAsync(string url, JsonElement payload, CancellationToken cancellationToken)
-    {
-        var response = await _httpClient.PostAsJsonAsync(url, payload, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Poster API call failed: {StatusCode}", response.StatusCode);
-            return null;
-        }
-
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(content) ? "{}" : content);
-    }
 
     public Task<JsonDocument?> GetClientGroupsAsync(CancellationToken cancellationToken) =>
         SendPosterRequestAsync("clients.getGroups", null, null, cancellationToken);
@@ -482,22 +450,4 @@ public sealed class PosterService
         return JsonDocument.Parse(string.IsNullOrWhiteSpace(content) ? "{}" : content);
     }
 
-    public async Task<JsonDocument?> GetAlternateOrderAsync(string transactionComment, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(_options.AlternateOrdersUrl) || string.IsNullOrWhiteSpace(transactionComment))
-        {
-            return null;
-        }
-
-        var url = $"{_options.AlternateOrdersUrl.TrimEnd('/')}/get_order/{Uri.EscapeDataString(transactionComment)}";
-        var response = await _httpClient.GetAsync(url, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Alternate orders call failed: {StatusCode}", response.StatusCode);
-            return null;
-        }
-
-        var content = await response.Content.ReadAsStringAsync(cancellationToken);
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(content) ? "{}" : content);
-    }
 }

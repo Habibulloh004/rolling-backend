@@ -1,0 +1,105 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Rolling.Infrastructure.Configuration;
+using Rolling.Infrastructure.Poster;
+
+namespace Rolling.Web.HostedServices;
+
+public sealed class PosterCacheRefreshService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly PosterCacheRefreshOptions _options;
+    private readonly ILogger<PosterCacheRefreshService> _logger;
+
+    public PosterCacheRefreshService(
+        IServiceScopeFactory scopeFactory,
+        IOptions<PosterCacheRefreshOptions> options,
+        ILogger<PosterCacheRefreshService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _options = options.Value;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (_options.WarmOnStartup)
+        {
+            await WarmCachesAsync(stoppingToken);
+        }
+
+        var tasks = new List<Task>
+        {
+            RunPeriodicAsync("products", _options.ProductsSeconds, (cache, ct) => cache.RevalidateAllProductsAsync(ct), stoppingToken),
+            RunPeriodicAsync("categories", _options.CategoriesSeconds, (cache, ct) => cache.RevalidateCategoriesAsync(ct), stoppingToken),
+            RunPeriodicAsync("promotions", _options.PromotionsSeconds, (cache, ct) => cache.RevalidatePromotionsAsync(null, ct), stoppingToken),
+            RunPeriodicAsync("client-groups", _options.ClientGroupsSeconds, (cache, ct) => cache.RevalidateClientGroupsAsync(ct), stoppingToken),
+            RunPeriodicAsync("spots", _options.SpotsSeconds, (cache, ct) => cache.RevalidateSpotsAsync(ct), stoppingToken),
+            RunPeriodicAsync("employees", _options.EmployeesSeconds, (cache, ct) => cache.RevalidateEmployeesAsync(ct), stoppingToken)
+        };
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task WarmCachesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("Warming poster caches on startup...");
+            await WithPosterCacheAsync(cancellationToken, async cache =>
+            {
+                await cache.RevalidateAllProductsAsync(cancellationToken);
+                await cache.RevalidateCategoriesAsync(cancellationToken);
+                await cache.RevalidatePromotionsAsync(null, cancellationToken);
+                await cache.RevalidateClientGroupsAsync(cancellationToken);
+                await cache.RevalidateSpotsAsync(cancellationToken);
+                await cache.RevalidateEmployeesAsync(cancellationToken);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to warm poster caches");
+        }
+    }
+
+    private async Task RunPeriodicAsync(
+        string name,
+        int intervalSeconds,
+        Func<ICachedPosterService, CancellationToken, Task> action,
+        CancellationToken cancellationToken)
+    {
+        if (intervalSeconds <= 0)
+        {
+            return;
+        }
+
+        var interval = TimeSpan.FromSeconds(intervalSeconds);
+        using var timer = new PeriodicTimer(interval);
+
+        while (await timer.WaitForNextTickAsync(cancellationToken))
+        {
+            try
+            {
+                _logger.LogInformation("Scheduled refresh: {CacheName}", name);
+                await WithPosterCacheAsync(cancellationToken, cache => action(cache, cancellationToken));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Scheduled refresh failed for {CacheName}", name);
+            }
+        }
+    }
+
+    private async Task WithPosterCacheAsync(CancellationToken cancellationToken, Func<ICachedPosterService, Task> action)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var cache = scope.ServiceProvider.GetRequiredService<ICachedPosterService>();
+        cancellationToken.ThrowIfCancellationRequested();
+        await action(cache);
+    }
+}

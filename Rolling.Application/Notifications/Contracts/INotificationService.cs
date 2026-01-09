@@ -5,7 +5,7 @@ namespace Rolling.Application.Notifications.Contracts;
 
 public interface INotificationService
 {
-    Task<NotificationDto> CreateAsync(CreateNotificationCommand command, CancellationToken cancellationToken);
+    Task<NotificationDto> CreateAsync(CreateNotificationCommand command, string lang, CancellationToken cancellationToken);
 
-    Task<IReadOnlyCollection<NotificationDto>> GetRecentAsync(int take, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<NotificationDto>> GetRecentAsync(int take, string lang, CancellationToken cancellationToken);
 }

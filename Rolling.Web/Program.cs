@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Rolling.Application;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure;
 using Rolling.Infrastructure.Services;
 using Rolling.Web.Diagnostics;
@@ -30,13 +31,16 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<WebSocketConnectionManager>();
+builder.Services.AddSingleton<ICacheRevalidationPublisher, WebSocketCacheRevalidationPublisher>();
 builder.Services.AddSingleton<ChatRealtimeCoordinator>();
 builder.Services.AddScoped<ChatSocketHandler>();
 builder.Services.AddScoped<PosterUpdatesSocketHandler>();
 builder.Services.AddHostedService<NotificationCleanupService>();
+builder.Services.AddHostedService<PosterCacheRefreshService>();
 builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
 builder.Services.AddSingleton<IWebhookMessageStore, InMemoryWebhookMessageStore>();
+builder.Services.AddScoped<PosterTransactionWebhookHandler>();
 builder.Services.AddHttpClient<EskizSmsClient>((sp, client) =>
 {
     var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<SmsOptions>>();

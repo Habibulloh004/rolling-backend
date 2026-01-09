@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Rolling.Application.Abstractions.Messaging;
 using Rolling.Application.Abstractions.Persistence;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Application.Abstractions.Time;
 using Rolling.Infrastructure.Configuration;
 using Rolling.Infrastructure.EventBus;
@@ -16,12 +17,14 @@ using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Poster;
+using Rolling.Infrastructure.Realtime;
 using Rolling.Infrastructure.Payments;
 using Rolling.Infrastructure.Persistence;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Redis;
 using Rolling.Infrastructure.Time;
 using StackExchange.Redis;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Rolling.Infrastructure;
 
@@ -37,6 +40,7 @@ public static class DependencyInjection
         services.Configure<PlumOptions>(configuration.GetSection(PlumOptions.SectionName));
         services.Configure<PosterOptions>(configuration.GetSection(PosterOptions.SectionName));
         services.Configure<TelegramOptions>(configuration.GetSection(TelegramOptions.SectionName));
+        services.Configure<PosterCacheRefreshOptions>(configuration.GetSection(PosterCacheRefreshOptions.SectionName));
 
         services.AddSingleton<IConnectionMultiplexer>(provider =>
         {
@@ -87,20 +91,26 @@ public static class DependencyInjection
         services.AddScoped<ClickService>();
         services.AddScoped<PaymeService>();
         services.AddSingleton<IClock, SystemClock>();
-        services.AddScoped<RedisNotificationRepository>();
         services.AddSingleton<IChatMessageCache, RedisChatMessageCache>();
         services.AddScoped<PostgresNotificationRepository>();
         services.AddScoped<PostgresChatRepository>();
+
+        // Redis Notification Cache (like Banners - PostgreSQL is source of truth, Redis is cache)
+        services.AddSingleton<IRedisNotificationCache, RedisNotificationCache>();
         services.AddScoped<INotificationRepository, PersistingNotificationRepository>();
         services.AddScoped<IChatThreadRepository>(provider => provider.GetRequiredService<PostgresChatRepository>());
         services.AddScoped<IChatMessageRepository>(provider => provider.GetRequiredService<PostgresChatRepository>());
         services.AddSingleton<IEventBus, InMemoryEventBus>();
+        services.TryAddSingleton<ICacheRevalidationPublisher, NullCacheRevalidationPublisher>();
 
         // Redis Banner Cache
         services.AddSingleton<Rolling.Infrastructure.Persistence.Redis.IRedisBannerCache, Rolling.Infrastructure.Persistence.Redis.RedisBannerCache>();
 
         // Redis Branch Config Cache
         services.AddSingleton<Rolling.Infrastructure.Persistence.Redis.IRedisBranchConfigCache, Rolling.Infrastructure.Persistence.Redis.RedisBranchConfigCache>();
+
+        // Poster array caches (in-memory, infinite lifetime)
+        services.AddSingleton<PosterArrayCacheStore>();
 
         // In-Memory Cache Service (for Poster API)
         services.AddSingleton<Rolling.Infrastructure.Persistence.Memory.IInMemoryCacheService>(provider =>

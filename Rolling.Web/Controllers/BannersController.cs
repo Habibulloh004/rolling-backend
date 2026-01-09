@@ -1,5 +1,8 @@
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Application.Abstractions.Realtime;
+using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Redis;
 using Rolling.Web.Models.Banners;
@@ -12,12 +15,21 @@ public sealed class BannersController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
     private readonly IRedisBannerCache _cache;
+    private readonly ICacheRevalidationPublisher _publisher;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<BannersController> _logger;
 
-    public BannersController(AppDbContext dbContext, IRedisBannerCache cache, ILogger<BannersController> logger)
+    public BannersController(
+        AppDbContext dbContext,
+        IRedisBannerCache cache,
+        ICacheRevalidationPublisher publisher,
+        TimeProvider timeProvider,
+        ILogger<BannersController> logger)
     {
         _dbContext = dbContext;
         _cache = cache;
+        _publisher = publisher;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -129,6 +141,7 @@ public sealed class BannersController : ControllerBase
 
             // Invalidate cache after creating new banner
             await _cache.InvalidateBannerCacheAsync(cancellationToken);
+            await PublishRevalidationAsync("created", cancellationToken);
 
             return CreatedAtAction(
                 nameof(GetBannerAsync),
@@ -172,6 +185,7 @@ public sealed class BannersController : ControllerBase
 
             // Invalidate cache after updating banner
             await _cache.InvalidateBannerByIdAsync(id, cancellationToken);
+            await PublishRevalidationAsync("updated", cancellationToken);
 
             return Ok(BannerResponse.FromEntity(banner));
         }
@@ -204,6 +218,7 @@ public sealed class BannersController : ControllerBase
 
             // Invalidate cache after deleting banner
             await _cache.InvalidateBannerByIdAsync(id, cancellationToken);
+            await PublishRevalidationAsync("deleted", cancellationToken);
 
             return Ok(new { success = true, message = "Banner deleted" });
         }
@@ -236,6 +251,7 @@ public sealed class BannersController : ControllerBase
 
             // Invalidate cache after permanently deleting banner
             await _cache.InvalidateBannerByIdAsync(id, cancellationToken);
+            await PublishRevalidationAsync("deleted", cancellationToken);
 
             return Ok(new { success = true, message = "Banner permanently deleted" });
         }
@@ -244,5 +260,56 @@ public sealed class BannersController : ControllerBase
             _logger.LogError(ex, "Error permanently deleting banner {BannerId}", id);
             return StatusCode(500, new { error = "Failed to permanently delete banner" });
         }
+    }
+
+    /// <summary>
+    /// Revalidate (refresh) banner caches
+    /// </summary>
+    [HttpPost("revalidate")]
+    public async Task<IActionResult> RevalidateBannersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _cache.InvalidateBannerCacheAsync(cancellationToken);
+
+            var banners = await _dbContext.Banners
+                .AsNoTracking()
+                .Where(b => b.IsActive)
+                .OrderByDescending(b => b.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            await _cache.SetBannersAsync(banners, null, cancellationToken);
+            foreach (var group in banners.GroupBy(b => b.Lang))
+            {
+                await _cache.SetBannersAsync(group.ToList(), group.Key, cancellationToken);
+            }
+
+            await PublishRevalidationAsync("revalidated", cancellationToken);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Banners cache revalidated",
+                count = banners.Count,
+                timestamp = _timeProvider.GetUtcNow().ToString("O")
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error revalidating banners cache");
+            return StatusCode(500, new { error = "Failed to revalidate cache" });
+        }
+    }
+
+    private Task PublishRevalidationAsync(string changeType, CancellationToken cancellationToken)
+    {
+        var updatedAt = _timeProvider.GetUtcNow();
+        var payload = new CacheRevalidationEvent(
+            CacheResources.Banners,
+            changeType,
+            updatedAt.ToUnixTimeMilliseconds().ToString(),
+            updatedAt);
+
+        return _publisher.PublishAsync(payload, cancellationToken);
     }
 }

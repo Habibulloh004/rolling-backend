@@ -9,5 +9,13 @@ public sealed class PosterWebhookRequest
     public JsonElement? Data { get; init; }
 
     [JsonPropertyName("object_id")]
-    public string? ObjectId { get; init; }
+    public JsonElement? ObjectId { get; init; }
+
+    public string? ObjectIdValue => ObjectId switch
+    {
+        null => null,
+        _ when ObjectId.Value.ValueKind == JsonValueKind.String => ObjectId.Value.GetString(),
+        _ when ObjectId.Value.ValueKind == JsonValueKind.Number => ObjectId.Value.GetRawText(),
+        _ => null
+    };
 }

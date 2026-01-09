@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Abstractions.Persistence;
-using Rolling.Domain.Notifications;
+using Rolling.Application.Notifications.Commands;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Persistence.Redis;
@@ -75,14 +75,13 @@ public sealed class SeedController : ControllerBase
 
         if (seedDomainNotifications)
         {
-            var channel = normalized == "events" ? "seed:events" : "seed:notifications";
-            var domainNotifications = Enumerable.Range(0, target).Select(_ => FakeDomainNotification(channel)).ToList();
-            foreach (var notification in domainNotifications)
+            var commands = Enumerable.Range(0, target).Select(_ => FakeNotificationCommand()).ToList();
+            foreach (var command in commands)
             {
-                await _notificationRepository.SaveAsync(notification, cancellationToken);
+                await _notificationRepository.SaveAsync(command, cancellationToken);
             }
 
-            results["notifications"] = domainNotifications.Count;
+            results["notifications"] = commands.Count;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -154,10 +153,17 @@ public sealed class SeedController : ControllerBase
         ClosedTime = "23:00"
     };
 
-    private Notification FakeDomainNotification(string channel)
+    private CreateNotificationCommand FakeNotificationCommand()
     {
         var id = _random.Next(1, 9999);
-        return Notification.Create(channel, $"Seed title {id}", $"Seed message {id}", DateTimeOffset.UtcNow);
+        return new CreateNotificationCommand(
+            $"Seed title {id}",
+            $"Seed message {id}",
+            $"Заголовок {id}",
+            $"Сообщение {id}",
+            $"Sarlavha {id}",
+            $"Xabar {id}"
+        );
     }
 
     /// <summary>

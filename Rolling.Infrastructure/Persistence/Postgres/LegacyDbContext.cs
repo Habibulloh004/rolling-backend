@@ -25,8 +25,6 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<BusinessTime> Times => Set<BusinessTime>();
 
-    public DbSet<NotificationEvent> NotificationEvents => Set<NotificationEvent>();
-
     public DbSet<Banner> Banners => Set<Banner>();
 
     public DbSet<ChatThreadRecord> ChatThreads => Set<ChatThreadRecord>();
@@ -192,6 +190,7 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.RuBody).HasColumnName("ru_body");
             entity.Property(e => e.UzTitle).HasColumnName("uz_title");
             entity.Property(e => e.UzBody).HasColumnName("uz_body");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
         });
 
         modelBuilder.Entity<BusinessTime>(entity =>
@@ -200,16 +199,6 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.OpenedTime).HasColumnName("opened_time");
             entity.Property(e => e.ClosedTime).HasColumnName("closed_time");
-        });
-
-        modelBuilder.Entity<NotificationEvent>(entity =>
-        {
-            entity.ToTable("notification_events");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Channel).HasColumnName("channel");
-            entity.Property(e => e.Title).HasColumnName("title");
-            entity.Property(e => e.Message).HasColumnName("message");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
         });
 
         modelBuilder.Entity<Banner>(entity =>

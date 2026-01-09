@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Application.Abstractions.Realtime;
+using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Persistence.Postgres;
+using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Persistence.Redis;
 using Rolling.Web.Models.BranchConfigs;
 
@@ -13,15 +16,21 @@ public sealed class BranchConfigurationsController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
     private readonly IRedisBranchConfigCache _cache;
+    private readonly ICacheRevalidationPublisher _publisher;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<BranchConfigurationsController> _logger;
 
     public BranchConfigurationsController(
         AppDbContext dbContext,
         IRedisBranchConfigCache cache,
+        ICacheRevalidationPublisher publisher,
+        TimeProvider timeProvider,
         ILogger<BranchConfigurationsController> logger)
     {
         _dbContext = dbContext;
         _cache = cache;
+        _publisher = publisher;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -211,6 +220,7 @@ public sealed class BranchConfigurationsController : ControllerBase
 
             // Invalidate cache after creating new config
             await _cache.InvalidateBranchConfigCacheAsync(cancellationToken);
+            await PublishRevalidationAsync("created", config, cancellationToken);
 
             return CreatedAtAction(
                 nameof(GetBranchConfigurationAsync),
@@ -323,6 +333,7 @@ public sealed class BranchConfigurationsController : ControllerBase
             // Invalidate both single branch cache AND list cache
             await _cache.InvalidateBranchConfigByIdAsync(id, cancellationToken);
             await _cache.InvalidateBranchConfigCacheAsync(cancellationToken);
+            await PublishRevalidationAsync("updated", config, cancellationToken);
 
             return Ok(new SingleBranchConfigurationResponse
             {
@@ -362,6 +373,7 @@ public sealed class BranchConfigurationsController : ControllerBase
             // Invalidate both single branch cache AND list cache
             await _cache.InvalidateBranchConfigByIdAsync(id, cancellationToken);
             await _cache.InvalidateBranchConfigCacheAsync(cancellationToken);
+            await PublishRevalidationAsync("deleted", config, cancellationToken);
 
             return Ok(new { success = true, message = "Branch configuration deleted" });
         }
@@ -394,6 +406,7 @@ public sealed class BranchConfigurationsController : ControllerBase
             await _cache.SetBranchConfigurationsAsync(configs, cancellationToken);
 
             _logger.LogInformation("Revalidated branch configurations cache (count: {Count})", configs.Count);
+            await PublishRevalidationAsync("revalidated", null, cancellationToken);
 
             return Ok(new
             {
@@ -431,6 +444,7 @@ public sealed class BranchConfigurationsController : ControllerBase
             await _cache.SetBranchConfigurationAsync(config, cancellationToken);
 
             _logger.LogInformation("Revalidated branch configuration {Id} cache", id);
+            await PublishRevalidationAsync("revalidated", config, cancellationToken);
 
             return Ok(new
             {
@@ -444,5 +458,25 @@ public sealed class BranchConfigurationsController : ControllerBase
             _logger.LogError(ex, "Error revalidating branch configuration {Id} cache", id);
             return StatusCode(500, new { error = "Failed to revalidate cache" });
         }
+    }
+
+    private Task PublishRevalidationAsync(string changeType, BranchConfiguration? config, CancellationToken cancellationToken)
+    {
+        var updatedAt = config != null
+            ? new DateTimeOffset(DateTime.SpecifyKind(config.UpdatedAt, DateTimeKind.Utc))
+            : _timeProvider.GetUtcNow();
+
+        var scope = config != null
+            ? new CacheRevalidationScope(BranchId: config.Id.ToString())
+            : null;
+
+        var payload = new CacheRevalidationEvent(
+            CacheResources.Branches,
+            changeType,
+            updatedAt.ToUnixTimeMilliseconds().ToString(),
+            updatedAt,
+            scope);
+
+        return _publisher.PublishAsync(payload, cancellationToken);
     }
 }

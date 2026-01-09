@@ -97,7 +97,11 @@ public sealed class OrderProcessor
 
     private async Task<string?> HandleDeliveryOrderAsync(JsonDocument orderDetails, CancellationToken cancellationToken)
     {
-        var response = await _posterService.CreateAbduganiOrderAsync(orderDetails.RootElement, cancellationToken);
-        return response?.RootElement.TryGetProperty("order_id", out var value) == true ? value.GetString() : null;
+        var response = await _posterService.CreateIncomingOrderAsync(orderDetails.RootElement, cancellationToken);
+        var transactionId = response?.RootElement.TryGetProperty("response", out var resp) == true &&
+                            resp.TryGetProperty("transaction_id", out var txElement)
+            ? txElement.GetString()
+            : null;
+        return transactionId;
     }
 }

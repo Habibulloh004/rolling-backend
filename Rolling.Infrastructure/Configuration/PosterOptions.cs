@@ -10,10 +10,6 @@ public sealed class PosterOptions
 
     public string Token { get; init; } = GetEnv("PAST");
 
-    public string OrdersBackendUrl { get; init; } = GetEnv("BACKEND_URL");
-
-    public string AlternateOrdersUrl { get; init; } = GetEnv("AURL");
-
     private static string GetEnv(string key, string defaultValue = "")
     {
         var value = Environment.GetEnvironmentVariable(key);

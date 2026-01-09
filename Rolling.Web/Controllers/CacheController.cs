@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Rolling.Infrastructure.Persistence.Memory;
+using Rolling.Infrastructure.Poster;
 
 namespace Rolling.Web.Controllers;
 
@@ -8,13 +9,16 @@ namespace Rolling.Web.Controllers;
 public class CacheController : ControllerBase
 {
     private readonly IInMemoryCacheService _cacheService;
+    private readonly ICachedPosterService _posterCache;
     private readonly ILogger<CacheController> _logger;
 
     public CacheController(
         IInMemoryCacheService cacheService,
+        ICachedPosterService posterCache,
         ILogger<CacheController> logger)
     {
         _cacheService = cacheService;
+        _posterCache = posterCache;
         _logger = logger;
     }
 
@@ -151,5 +155,44 @@ public class CacheController : ControllerBase
     {
         public object? Data { get; set; }
         public int? Ttl { get; set; }
+    }
+
+    /// <summary>
+    /// POST /api/cache/revalidate/:resource
+    /// Revalidate poster array caches
+    /// </summary>
+    [HttpPost("revalidate/{resource}")]
+    public async Task<IActionResult> RevalidateResourceAsync(string resource, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (resource.ToLowerInvariant())
+            {
+                case "products":
+                    return Ok(await _posterCache.RevalidateAllProductsAsync(cancellationToken));
+                case "categories":
+                    return Ok(await _posterCache.RevalidateCategoriesAsync(cancellationToken));
+                case "promotions":
+                    return Ok(await _posterCache.RevalidatePromotionsAsync(null, cancellationToken));
+                case "client-groups":
+                case "clientgroups":
+                    return Ok(await _posterCache.RevalidateClientGroupsAsync(cancellationToken));
+                case "spots":
+                    return Ok(await _posterCache.RevalidateSpotsAsync(cancellationToken));
+                case "employees":
+                    return Ok(await _posterCache.RevalidateEmployeesAsync(cancellationToken));
+                case "clients":
+                    return Ok(await _posterCache.RevalidateClientsAsync(null, cancellationToken));
+                case "transactions":
+                    return BadRequest(new { error = "Transactions require query parameters; use /api/poster/transactions/revalidate." });
+                default:
+                    return NotFound(new { error = $"Unknown resource '{resource}'" });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error revalidating resource {Resource}", resource);
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 }
