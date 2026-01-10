@@ -9,13 +9,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Decode SSH key
+        run: |
+          echo "${{ secrets.SSH_KEY_B64 }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
-          key: ${{ secrets.SSH_KEY }}
+          key_path: /tmp/deploy_key
           script: |
             set -e
             cd /opt/server
