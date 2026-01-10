@@ -4,24 +4,45 @@ on:
   push:
     branches: ["main"]
 
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Prepare SSH key
+        shell: bash
         run: |
+          set -euo pipefail
+
+          # SSH folder
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Decode private key from base64 secret to a file
           echo "${{ secrets.SSH_KEY_B64 }}" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+          # Avoid interactive host key prompt
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy
+        shell: bash
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.SSH_PORT }} \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "set -e;
-             cd /opt/server;
-             git fetch --all;
-             git reset --hard origin/main;
-             docker compose up -d --build;
+          set -euo pipefail
+
+          ssh -T \
+            -i ~/.ssh/id_ed25519 \
+            -p "${{ secrets.SSH_PORT }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "set -e
+             cd /opt/server
+             git fetch --all
+             git reset --hard origin/main
+             docker compose up -d --build
              docker ps"
