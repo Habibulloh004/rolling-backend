@@ -18,11 +18,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-
-          # Decode private key from base64 secret
           echo "${{ secrets.SSH_KEY_B64 }}" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
@@ -31,19 +28,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # TRIM secrets (remove spaces/newlines/\r)
           HOST="$(echo '${{ secrets.SSH_HOST }}' | tr -d ' \t\r\n')"
           PORT="$(echo '${{ secrets.SSH_PORT }}' | tr -d ' \t\r\n')"
           USER="$(echo '${{ secrets.SSH_USER }}' | tr -d ' \t\r\n')"
 
-          # Debug (doesn't reveal secrets, only lengths)
-          echo "HOST length: ${#HOST}, PORT length: ${#PORT}, USER length: ${#USER}"
-
-          # Add host key (avoid interactive prompt)
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 600 ~/.ssh/known_hosts
 
-          # Connect & deploy
           ssh -T \
             -o BatchMode=yes \
             -o ConnectTimeout=20 \
@@ -51,7 +42,7 @@ jobs:
             -p "$PORT" \
             "${USER}@${HOST}" \
             "set -e
-             cd /opt/server
+             cd /opt/server/rolling-backend
              git fetch --all
              git reset --hard origin/main
              docker compose up -d --build
