@@ -1,3 +1,11 @@
+dotnet restore Rolling.Web/Rolling.Web.csproj
+dotnet build Rolling.Web/Rolling.Web.csproj -c Debug
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project Rolling.Web/Rolling.Web.csproj
+
+ASPNETCORE_ENVIRONMENT=Development dotnet watch --project rolling-back/Rolling.Web/Rolling.Web.csproj
+
+
+
 # Rolling
 
 A clean-architecture ASP.NET Core MVC backend that exposes structured HTTP endpoints, persists events in Redis, and streams realtime updates over raw WebSockets via an in-memory event bus.

@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.Configure<PosterOptions>(configuration.GetSection(PosterOptions.SectionName));
         services.Configure<TelegramOptions>(configuration.GetSection(TelegramOptions.SectionName));
         services.Configure<PosterCacheRefreshOptions>(configuration.GetSection(PosterCacheRefreshOptions.SectionName));
+        services.Configure<OrderPollingOptions>(configuration.GetSection(OrderPollingOptions.SectionName));
 
         services.AddSingleton<IConnectionMultiplexer>(provider =>
         {
@@ -121,6 +122,9 @@ public static class DependencyInjection
 
         // Cached Poster Service
         services.AddScoped<Rolling.Infrastructure.Poster.ICachedPosterService, Rolling.Infrastructure.Poster.CachedPosterService>();
+
+        // Active Order Tracker (singleton for tracking orders across requests)
+        services.AddSingleton<Rolling.Infrastructure.Orders.ActiveOrderTracker>();
 
         return services;
     }

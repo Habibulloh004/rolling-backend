@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
+using Rolling.Web.Models.Orders;
 
 namespace Rolling.Web.Controllers;
 
@@ -14,11 +16,16 @@ namespace Rolling.Web.Controllers;
 public sealed class ClientOrdersController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
+    private readonly ActiveOrderTracker _orderTracker;
     private readonly ILogger<ClientOrdersController> _logger;
 
-    public ClientOrdersController(AppDbContext dbContext, ILogger<ClientOrdersController> logger)
+    public ClientOrdersController(
+        AppDbContext dbContext,
+        ActiveOrderTracker orderTracker,
+        ILogger<ClientOrdersController> logger)
     {
         _dbContext = dbContext;
+        _orderTracker = orderTracker;
         _logger = logger;
     }
 
@@ -62,6 +69,77 @@ public sealed class ClientOrdersController : ControllerBase
             normalizedPhone);
 
         return Ok(new { statuses });
+    }
+
+    /// <summary>
+    /// Cancel an order by backend ID, order number, or Poster identifiers.
+    /// POST /api/client/orders/cancel
+    /// </summary>
+    [HttpPost("cancel")]
+    public async Task<IActionResult> CancelOrderAsync(
+        [FromBody] CancelOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { error = "Request body is required" });
+        }
+
+        var normalizedOrderNumber = NormalizeOrderIdentifier(request.OrderNumber);
+        var normalizedIncomingOrderId = NormalizeOrderIdentifier(request.PosterIncomingOrderId);
+        var normalizedTransactionId = NormalizeOrderIdentifier(request.PosterTransactionId);
+
+        if (string.IsNullOrWhiteSpace(request.OrderId) &&
+            string.IsNullOrWhiteSpace(normalizedOrderNumber) &&
+            string.IsNullOrWhiteSpace(normalizedIncomingOrderId) &&
+            string.IsNullOrWhiteSpace(normalizedTransactionId))
+        {
+            return BadRequest(new { error = "orderId, orderNumber, posterIncomingOrderId, or posterTransactionId is required" });
+        }
+
+        var order = await _dbContext.Orders.FirstOrDefaultAsync(o =>
+                (!string.IsNullOrWhiteSpace(request.OrderId) && o.Id == request.OrderId) ||
+                (!string.IsNullOrWhiteSpace(normalizedTransactionId) && o.PosterTransactionId == normalizedTransactionId) ||
+                (!string.IsNullOrWhiteSpace(normalizedIncomingOrderId) && o.PosterIncomingOrderId == normalizedIncomingOrderId) ||
+                (!string.IsNullOrWhiteSpace(normalizedOrderNumber) &&
+                    (o.OrderNumber == normalizedOrderNumber || o.OrderNumber == $"#{normalizedOrderNumber}")),
+            cancellationToken);
+
+        if (order is null)
+        {
+            return NotFound(new { error = "Order not found" });
+        }
+
+        if (order.Status == OrderStatus.Delivered)
+        {
+            return Conflict(new { error = "Order already delivered" });
+        }
+
+        if (order.Status == OrderStatus.Cancelled)
+        {
+            return Ok(new
+            {
+                cancelled = false,
+                status = order.Status.ToString().ToLowerInvariant(),
+                orderId = order.Id,
+                orderNumber = order.OrderNumber
+            });
+        }
+
+        order.Status = OrderStatus.Cancelled;
+        order.UpdatedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _orderTracker.UpdateOrderStatus(order.Id, OrderStatus.Cancelled);
+        _orderTracker.UntrackOrder(order.Id);
+
+        return Ok(new
+        {
+            cancelled = true,
+            status = order.Status.ToString().ToLowerInvariant(),
+            orderId = order.Id,
+            orderNumber = order.OrderNumber
+        });
     }
 
     /// <summary>
@@ -120,6 +198,22 @@ public sealed class ClientOrdersController : ControllerBase
             return "998" + digits;
 
         return digits;
+    }
+
+    private static string? NormalizeOrderIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("#", StringComparison.Ordinal))
+        {
+            trimmed = trimmed[1..];
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static string MapStatus(OrderStatus status) => status switch

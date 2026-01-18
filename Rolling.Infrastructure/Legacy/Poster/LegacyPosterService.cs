@@ -101,8 +101,11 @@ public sealed class PosterService
             : await _httpClient.PostAsync(url, content, cancellationToken);
 
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        _logger.LogInformation("SendPosterRequestAsync - Response status: {StatusCode}, Body: {Body}",
-            response.StatusCode, responseBody);
+        _logger.LogInformation("SendPosterRequestAsync - Response status: {StatusCode}", response.StatusCode);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("SendPosterRequestAsync - Response body length: {Length}", responseBody.Length);
+        }
 
         JsonDocument? parsed = null;
         try
@@ -377,8 +380,8 @@ public sealed class PosterService
             ["courier_id"] = courierId,
             ["dateFrom"] = dateFrom,
             ["dateTo"] = dateTo,
-            ["include_delivery"] = includeDelivery ? "true" : "false",
-            ["include_products"] = includeProducts ? "true" : "false",
+            ["include_delivery"] = includeDelivery ? "1" : "0",
+            ["include_products"] = includeProducts ? "1" : "0",
             ["include_history"] = includeHistory ? "true" : "false"
         };
 
@@ -395,9 +398,9 @@ public sealed class PosterService
         var query = new Dictionary<string, string?>
         {
             ["transaction_id"] = transactionId,
-            ["include_delivery"] = includeDelivery ? "true" : "false",
+            ["include_delivery"] = includeDelivery ? "1" : "0",
             ["include_history"] = includeHistory ? "true" : "false",
-            ["include_products"] = includeProducts ? "true" : "false"
+            ["include_products"] = includeProducts ? "1" : "0"
         };
 
         return SendPosterRequestAsync("dash.getTransaction", query, null, cancellationToken);
@@ -448,6 +451,41 @@ public sealed class PosterService
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         return JsonDocument.Parse(string.IsNullOrWhiteSpace(content) ? "{}" : content);
+    }
+
+    /// <summary>
+    /// Get incoming order details by ID to check status.
+    /// </summary>
+    public Task<JsonDocument?> GetIncomingOrderAsync(string incomingOrderId, CancellationToken cancellationToken) =>
+        SendPosterRequestAsync(
+            "incomingOrders.getIncomingOrder",
+            new Dictionary<string, string?> { ["incoming_order_id"] = incomingOrderId },
+            null,
+            cancellationToken);
+
+    /// <summary>
+    /// Get list of incoming orders with optional filters.
+    /// </summary>
+    public Task<JsonDocument?> GetIncomingOrdersAsync(
+        string? status = null,
+        string? dateFrom = null,
+        string? dateTo = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new Dictionary<string, string?>();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query["status"] = status;
+        if (!string.IsNullOrWhiteSpace(dateFrom))
+            query["dateFrom"] = dateFrom;
+        if (!string.IsNullOrWhiteSpace(dateTo))
+            query["dateTo"] = dateTo;
+
+        return SendPosterRequestAsync(
+            "incomingOrders.getIncomingOrders",
+            query.Count > 0 ? query : null,
+            null,
+            cancellationToken);
     }
 
 }

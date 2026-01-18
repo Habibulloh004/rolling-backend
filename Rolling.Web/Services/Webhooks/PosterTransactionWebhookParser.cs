@@ -70,7 +70,15 @@ internal static class PosterTransactionWebhookParser
         if (!TryGetObject(data, "transactions_history", out var history) &&
             !TryGetEmbeddedObject(data, "transactions_history", out history))
         {
-            if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("type_history", out _))
+            if (TryGetArray(data, "transactions_history", out var historyArray) ||
+                TryGetEmbeddedArray(data, "transactions_history", out historyArray))
+            {
+                if (!TryGetLatestHistory(historyArray, out history))
+                {
+                    return false;
+                }
+            }
+            else if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("type_history", out _))
             {
                 history = data;
             }
@@ -98,21 +106,43 @@ internal static class PosterTransactionWebhookParser
     {
         status = default;
 
-        switch (typeHistory)
+        switch (typeHistory.Trim().ToLowerInvariant())
         {
             case "changeprocessingstatus":
-                if (!TryGetInt(history, "value", out var processingCode))
+                if (TryGetInt(history, "value", out var processingCode))
                 {
-                    return false;
+                    return TryMapProcessingStatus(processingCode, out status);
                 }
-                return TryMapProcessingStatus(processingCode, out status);
+
+                if (TryGetString(history, "value", out var processingValue))
+                {
+                    return TryMapProcessingStatus(processingValue, out status);
+                }
+
+                return false;
 
             case "changeorderstatus":
-                if (!TryGetInt(history, "value", out var orderStatusCode))
+                if (TryGetInt(history, "value", out var orderStatusCode))
                 {
-                    return false;
+                    if (TryMapOrderStatusChangeCode(orderStatusCode, out status))
+                    {
+                        return true;
+                    }
+
+                    return TryMapOrderStatusCode(orderStatusCode, out status);
                 }
-                return TryMapOrderStatusCode(orderStatusCode, out status);
+
+                if (TryGetString(history, "value", out var orderStatusValue))
+                {
+                    if (TryMapOrderStatusChangeCode(orderStatusValue, out status))
+                    {
+                        return true;
+                    }
+
+                    return TryMapOrderStatusCode(orderStatusValue, out status);
+                }
+
+                return false;
 
             case "settable":
                 status = OrderStatus.Accepted;
@@ -132,24 +162,115 @@ internal static class PosterTransactionWebhookParser
 
     private static bool TryMapProcessingStatus(int code, out OrderStatus status)
     {
+        if (code >= 61)
+        {
+            status = OrderStatus.Delivered;
+            return true;
+        }
+
         switch (code)
         {
+            case 0:
             case 10:
                 status = OrderStatus.Pending;
                 return true;
+            case 1:
             case 20:
                 status = OrderStatus.Accepted;
                 return true;
+            case 2:
             case 30:
                 status = OrderStatus.Preparing;
+                return true;
+            case 3:
+                status = OrderStatus.Preparing;
+                return true;
+            case 4:
+                status = OrderStatus.OnTheWay;
                 return true;
             case 40:
                 status = OrderStatus.OnTheWay;
                 return true;
+            case 5:
             case 50:
                 status = OrderStatus.Delivered;
                 return true;
+            case 6:
             case 60:
+                status = OrderStatus.Cancelled;
+                return true;
+            default:
+                status = default;
+                return false;
+        }
+    }
+
+    private static bool TryMapOrderStatusChangeCode(int code, out OrderStatus status)
+    {
+        // Poster changeorderstatus codes (webhook history):
+        // 1 = accepted, 4 = cancelled
+        switch (code)
+        {
+            case 1:
+                status = OrderStatus.Accepted;
+                return true;
+            case 4:
+                status = OrderStatus.Cancelled;
+                return true;
+            default:
+                status = default;
+                return false;
+        }
+    }
+
+    private static bool TryMapOrderStatusChangeCode(string value, out OrderStatus status)
+    {
+        if (int.TryParse(value, out var code))
+        {
+            return TryMapOrderStatusChangeCode(code, out status);
+        }
+
+        status = default;
+        return false;
+    }
+
+    private static bool TryMapProcessingStatus(string value, out OrderStatus status)
+    {
+        if (int.TryParse(value, out var code))
+        {
+            return TryMapProcessingStatus(code, out status);
+        }
+
+        var normalized = value.Trim().ToLowerInvariant()
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        switch (normalized)
+        {
+            case "new":
+            case "pending":
+                status = OrderStatus.Pending;
+                return true;
+            case "accepted":
+                status = OrderStatus.Accepted;
+                return true;
+            case "cooking":
+            case "preparing":
+            case "ready":
+                status = OrderStatus.Preparing;
+                return true;
+            case "ontheway":
+            case "onway":
+                status = OrderStatus.OnTheWay;
+                return true;
+            case "delivered":
+            case "completed":
+            case "closed":
+                status = OrderStatus.Delivered;
+                return true;
+            case "cancelled":
+            case "canceled":
                 status = OrderStatus.Cancelled;
                 return true;
             default:
@@ -160,12 +281,73 @@ internal static class PosterTransactionWebhookParser
 
     private static bool TryMapOrderStatusCode(int code, out OrderStatus status)
     {
+        // Poster order status codes:
+        // 0 = new/pending, 1 = accepted, 2 = cooking/preparing, 3 = ready, 4 = on the way, 5 = delivered, 6 = cancelled
         switch (code)
         {
+            case 0:
+                status = OrderStatus.Pending;
+                return true;
             case 1:
                 status = OrderStatus.Accepted;
                 return true;
+            case 2:
+                status = OrderStatus.Preparing;
+                return true;
+            case 3:
+                status = OrderStatus.Preparing; // Ready maps to Preparing
+                return true;
             case 4:
+                status = OrderStatus.OnTheWay;
+                return true;
+            case 5:
+                status = OrderStatus.Delivered;
+                return true;
+            case 6:
+                status = OrderStatus.Cancelled;
+                return true;
+            default:
+                status = default;
+                return false;
+        }
+    }
+
+    private static bool TryMapOrderStatusCode(string value, out OrderStatus status)
+    {
+        if (int.TryParse(value, out var code))
+        {
+            return TryMapOrderStatusCode(code, out status);
+        }
+
+        var normalized = value.Trim().ToLowerInvariant();
+        switch (normalized)
+        {
+            case "new":
+            case "pending":
+                status = OrderStatus.Pending;
+                return true;
+            case "accepted":
+                status = OrderStatus.Accepted;
+                return true;
+            case "cooking":
+            case "preparing":
+                status = OrderStatus.Preparing;
+                return true;
+            case "ready":
+                status = OrderStatus.Preparing; // Ready maps to Preparing
+                return true;
+            case "ontheway":
+            case "on_the_way":
+            case "onway":
+            case "on_way":
+                status = OrderStatus.OnTheWay;
+                return true;
+            case "delivered":
+            case "completed":
+                status = OrderStatus.Delivered;
+                return true;
+            case "cancelled":
+            case "canceled":
                 status = OrderStatus.Cancelled;
                 return true;
             default:
@@ -233,6 +415,22 @@ internal static class PosterTransactionWebhookParser
         };
     }
 
+    private static bool TryGetLong(JsonElement element, string property, out long value)
+    {
+        value = 0;
+        if (!element.TryGetProperty(property, out var propertyElement))
+        {
+            return false;
+        }
+
+        return propertyElement.ValueKind switch
+        {
+            JsonValueKind.Number => propertyElement.TryGetInt64(out value),
+            JsonValueKind.String => long.TryParse(propertyElement.GetString(), out value),
+            _ => false
+        };
+    }
+
     private static bool TryGetObject(JsonElement element, string property, out JsonElement value)
     {
         value = default;
@@ -242,6 +440,23 @@ internal static class PosterTransactionWebhookParser
         }
 
         if (propertyElement.ValueKind == JsonValueKind.Object)
+        {
+            value = propertyElement;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetArray(JsonElement element, string property, out JsonElement value)
+    {
+        value = default;
+        if (!element.TryGetProperty(property, out var propertyElement))
+        {
+            return false;
+        }
+
+        if (propertyElement.ValueKind == JsonValueKind.Array)
         {
             value = propertyElement;
             return true;
@@ -281,6 +496,83 @@ internal static class PosterTransactionWebhookParser
         {
             return false;
         }
+    }
+
+    private static bool TryGetEmbeddedArray(JsonElement element, string property, out JsonElement value)
+    {
+        value = default;
+        if (!element.TryGetProperty(property, out var propertyElement) ||
+            propertyElement.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var raw = propertyElement.GetString();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var trimmed = raw.Trim();
+        if (!trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(trimmed);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            value = document.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetLatestHistory(JsonElement historyArray, out JsonElement history)
+    {
+        history = default;
+
+        if (historyArray.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        JsonElement? latest = null;
+        long? latestTime = null;
+        foreach (var entry in historyArray.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.Object && entry.TryGetProperty("type_history", out _))
+            {
+                if (TryGetLong(entry, "time", out var timestamp))
+                {
+                    if (latestTime is null || timestamp >= latestTime)
+                    {
+                        latestTime = timestamp;
+                        latest = entry;
+                    }
+                }
+                else if (latestTime is null)
+                {
+                    latest = entry;
+                }
+            }
+        }
+
+        if (latest is not null)
+        {
+            history = latest.Value;
+            return true;
+        }
+
+        return false;
     }
 }
 

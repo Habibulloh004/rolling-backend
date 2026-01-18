@@ -21,6 +21,21 @@ public sealed class NotificationTokenStore
 
     public int Count => _tokens.Count;
 
+    public bool MarkInvalid(string token)
+    {
+        if (_tokens.TryGetValue(token, out var entry))
+        {
+            _tokens[token] = entry with
+            {
+                IsValid = false,
+                LastUsed = DateTimeOffset.UtcNow
+            };
+            return true;
+        }
+
+        return false;
+    }
+
     public NotificationStats GetStats()
     {
         var stats = new NotificationStats();

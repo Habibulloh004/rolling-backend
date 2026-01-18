@@ -18,6 +18,14 @@
           }
         },
         {
+          "name": "List Notifications by Language",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/notifications?lang=en&take=20"
+          }
+        },
+        {
           "name": "Create Notification",
           "request": {
             "method": "POST",
@@ -48,11 +56,27 @@
           }
         },
         {
+          "name": "Get Transaction by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/transaction/{{transactionId}}"
+          }
+        },
+        {
           "name": "List Users",
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/users?take=50"
+          }
+        },
+        {
+          "name": "Get Route Usage Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/route-usage"
           }
         }
       ]
@@ -106,6 +130,14 @@
             "method": "POST",
             "header": [],
             "url": "{{baseUrl}}/api/seed?model=times&count=3"
+          }
+        },
+        {
+          "name": "Seed Branches",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/seed/branches"
           }
         }
       ]
@@ -163,6 +195,23 @@
             },
             "url": "{{baseUrl}}/api/click/checkout"
           }
+        },
+        {
+          "name": "Create Fake Transaction (Test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TEST-TXN-001\",\n  \"userId\": \"USER-123\",\n  \"orderDetails\": {\n    \"service_mode\": 2,\n    \"comment\": \"Test transaction\"\n  },\n  \"status\": \"completed\",\n  \"amount\": 100000\n}"
+            },
+            "url": "{{baseUrl}}/api/click/fake-transaction"
+          }
         }
       ]
     },
@@ -209,17 +258,1368 @@
           }
         },
         {
-          "name": "Get Transaction by ID",
+          "name": "Payme Fake Transaction (Test)",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/transaction/{{transactionId}}"
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TEST-TXN-002\",\n  \"userId\": \"USER-123\",\n  \"orderDetails\": {\n    \"service_mode\": 3,\n    \"comment\": \"Test Payme transaction\"\n  },\n  \"status\": \"completed\",\n  \"amount\": 90000\n}"
+            },
+            "url": "{{baseUrl}}/api/payme/fake-transaction"
           }
         }
       ]
     },
     {
-      "name": "Notifications",
+      "name": "Plum Payments",
+      "item": [
+        {
+          "name": "Branches & EPOS",
+          "item": [
+            {
+              "name": "Get Branches",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/branch-epos/branches?language=en"
+              }
+            },
+            {
+              "name": "Get Branch EPOS",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/branch-epos?branchId={{branchId}}&language=en"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cards",
+          "item": [
+            {
+              "name": "Register Card",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"expiry\": \"1225\",\n  \"userId\": \"{{userId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards"
+              }
+            },
+            {
+              "name": "Confirm Card Registration",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"session\": \"{{session}}\",\n  \"otp\": \"123456\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards/confirm"
+              }
+            },
+            {
+              "name": "Get OTP",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/cards/otp?session={{session}}&language=en"
+              }
+            },
+            {
+              "name": "Get User Cards",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/cards/user?userId={{userId}}&language=en"
+              }
+            },
+            {
+              "name": "Delete Card",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/cards?userCardId={{userCardId}}&language=en"
+              }
+            },
+            {
+              "name": "Check PINFL",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards/check-pinfl"
+              }
+            },
+            {
+              "name": "Get Card Owner Info",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards/owner-info"
+              }
+            },
+            {
+              "name": "Get Card Info",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/cards/info?userId={{userId}}&cardId={{cardId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Card Balances",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards/balances"
+              }
+            },
+            {
+              "name": "Get Card Balances by ID",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardId\": \"{{cardId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/cards/balances/by-id"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payments",
+          "item": [
+            {
+              "name": "Pay",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardId\": \"{{cardId}}\",\n  \"amount\": 100000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/pay"
+              }
+            },
+            {
+              "name": "Pay Confirm",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"session\": \"{{session}}\",\n  \"otp\": \"123456\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/pay_confirm"
+              }
+            },
+            {
+              "name": "Payment Without Registration",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"expiry\": \"1225\",\n  \"amount\": 100000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments/without-registration"
+              }
+            },
+            {
+              "name": "Create Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"cardId\": \"{{cardId}}\",\n  \"amount\": 100000,\n  \"extraId\": \"ORDER-123\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments"
+              }
+            },
+            {
+              "name": "Confirm Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"session\": \"{{session}}\",\n  \"otp\": \"123456\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments/confirm"
+              }
+            },
+            {
+              "name": "Reverse Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionId\": \"{{plumTransactionId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments/reverse"
+              }
+            },
+            {
+              "name": "Partial Reverse Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionId\": \"{{plumTransactionId}}\",\n  \"amount\": 50000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments/reverse/partial"
+              }
+            },
+            {
+              "name": "Get Payment by Extra ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/payments/by-extra?extraId=ORDER-123&language=en"
+              }
+            },
+            {
+              "name": "Search Payments",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"dateFrom\": \"2024-01-01\",\n  \"dateTo\": \"2024-12-31\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/payments/search"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hold",
+          "item": [
+            {
+              "name": "Create Hold",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardId\": \"{{cardId}}\",\n  \"amount\": 100000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/hold/create"
+              }
+            },
+            {
+              "name": "Confirm Hold",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/hold/confirm"
+              }
+            },
+            {
+              "name": "Dismiss Hold",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/hold/dismiss"
+              }
+            },
+            {
+              "name": "Charge Hold",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"holdId\": \"{{holdId}}\",\n  \"amount\": 100000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/hold/charge"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fiscal",
+          "item": [
+            {
+              "name": "Register Fiscal Receipt",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionId\": \"{{plumTransactionId}}\",\n  \"items\": [],\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/fiscal/register"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auto Payment",
+          "item": [
+            {
+              "name": "Create Auto Payment Client",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/client"
+              }
+            },
+            {
+              "name": "Get Auto Payment Client",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/client?userId={{userId}}&language=en"
+              }
+            },
+            {
+              "name": "Create Contract with OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"autoPayClientId\": \"{{autoPayClientId}}\",\n  \"cardId\": \"{{cardId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/with-otp"
+              }
+            },
+            {
+              "name": "Confirm Contract",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"session\": \"{{session}}\",\n  \"otp\": \"123456\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/confirm"
+              }
+            },
+            {
+              "name": "Contract Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"autoPayContractId\": \"{{autoPayContractId}}\",\n  \"amount\": 100000,\n  \"extraId\": \"ORDER-123\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/payment"
+              }
+            },
+            {
+              "name": "Get Contract Payment Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/payment-status?extraId=ORDER-123&language=en"
+              }
+            },
+            {
+              "name": "Reverse Contract Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionId\": \"{{plumTransactionId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/payment/reverse"
+              }
+            },
+            {
+              "name": "Full Contract Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"autoPayContractId\": \"{{autoPayContractId}}\",\n  \"amount\": 100000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/payment/full"
+              }
+            },
+            {
+              "name": "Refresh Uzcard",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/client/uzcard-refresh?autoPayClientId={{autoPayClientId}}&language=en"
+              }
+            },
+            {
+              "name": "Update Cards Status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/cards/update-status?jobId={{jobId}}&language=en"
+              }
+            },
+            {
+              "name": "Cancel Contract",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/cancel?autoPayContractId={{autoPayContractId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Contract",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract?autoPayContractId={{autoPayContractId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Contract Transactions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/contract/transactions?autoPayContractId={{autoPayContractId}}&language=en"
+              }
+            },
+            {
+              "name": "Get User Contracts",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/contracts?userId={{userId}}&language=en"
+              }
+            },
+            {
+              "name": "Refresh Humo",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/auto-payment/client/humo-refresh?autoPayClientId={{autoPayClientId}}&language=en"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Scoring",
+          "item": [
+            {
+              "name": "Confirm Scoring",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scoringId\": \"{{scoringId}}\",\n  \"otp\": \"123456\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/confirm"
+              }
+            },
+            {
+              "name": "Humo Scoring by Card",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/by-card"
+              }
+            },
+            {
+              "name": "Humo Scoring by Card Summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/by-card-summary"
+              }
+            },
+            {
+              "name": "Humo Summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/summary"
+              }
+            },
+            {
+              "name": "Humo Total Summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/total-summary"
+              }
+            },
+            {
+              "name": "Scoring by Card",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/by-card"
+              }
+            },
+            {
+              "name": "Scoring Summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/summary"
+              }
+            },
+            {
+              "name": "Get EB Debt",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/eb-debt?pinfl=12345678901234&phone=998901112233&language=en"
+              }
+            },
+            {
+              "name": "Get Humo by Card (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/humo/by-card?scoringId={{scoringId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Humo by Card Summary (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/humo/by-card-summary?scoringId={{scoringId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Humo Summary (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/humo/summary?scoringId={{scoringId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Humo Total Summary (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/humo/total-summary?scoringId={{scoringId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Scoring by Card (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/by-card/{{scoringId}}?language=en"
+              }
+            },
+            {
+              "name": "Get Scoring Summary (GET)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/summary/{{scoringId}}?language=en"
+              }
+            },
+            {
+              "name": "Get Tax Debt",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/tax-debt?pinfl=12345678901234&language=en"
+              }
+            },
+            {
+              "name": "Humo Scoring",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo"
+              }
+            },
+            {
+              "name": "Humo Average",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/avg"
+              }
+            },
+            {
+              "name": "Humo Month",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/humo/month"
+              }
+            },
+            {
+              "name": "Scoring Amount",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"pinfl\": \"12345678901234\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/amount"
+              }
+            },
+            {
+              "name": "Scoring Card",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/scoring/card"
+              }
+            },
+            {
+              "name": "Get Scoring Month",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/month?scoringId={{scoringId}}&language=en"
+              }
+            },
+            {
+              "name": "Get Scoring Point",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/scoring/point?scoringId={{scoringId}}&language=en"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Credit",
+          "item": [
+            {
+              "name": "Create Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"amount\": 1000000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit"
+              }
+            },
+            {
+              "name": "Create Self-Employed Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"amount\": 1000000,\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit/self-employed"
+              }
+            },
+            {
+              "name": "Get Credit by Data",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/plum/credit/by-data?transactionId={{plumTransactionId}}&extraId=ORDER-123&language=en"
+              }
+            },
+            {
+              "name": "Search Credits",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit/search"
+              }
+            },
+            {
+              "name": "Search Credits (Excel)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit/search/excel"
+              }
+            },
+            {
+              "name": "Reverse Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"transactionId\": \"{{plumTransactionId}}\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit/reverse"
+              }
+            },
+            {
+              "name": "Get Card Owner for Credit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cardNumber\": \"8600123456789012\",\n  \"language\": \"en\"\n}"
+                },
+                "url": "{{baseUrl}}/api/plum/credit/card-owner"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SMS Authentication",
+      "item": [
+        {
+          "name": "Get SMS Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sms/token"
+          }
+        },
+        {
+          "name": "Request Login OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sms/login/request"
+          }
+        },
+        {
+          "name": "Verify Login OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sms/login/verify"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client Authentication",
+      "item": [
+        {
+          "name": "Client Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/client/login"
+          }
+        },
+        {
+          "name": "Check Password Exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/client/check-password?phone=998901112233"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client Orders",
+      "item": [
+        {
+          "name": "Get Order Statuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/client/orders/statuses?phone=998901112233&limit=50"
+          }
+        },
+        {
+          "name": "Get Order Statuses Batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderIds\": [\"ORDER-001\", \"ORDER-002\", \"ORDER-003\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/client/orders/statuses/batch"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Banners",
+      "item": [
+        {
+          "name": "List Banners",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners"
+          }
+        },
+        {
+          "name": "List Banners by Language",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners?lang=en"
+          }
+        },
+        {
+          "name": "Get Banner by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners/{{bannerId}}"
+          }
+        },
+        {
+          "name": "Create Banner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"New Promotion\",\n  \"imageUrl\": \"https://example.com/banner.jpg\",\n  \"linkUrl\": \"https://example.com/promo\",\n  \"language\": \"en\",\n  \"priority\": 1,\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/banners"
+          }
+        },
+        {
+          "name": "Update Banner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Promotion\",\n  \"imageUrl\": \"https://example.com/banner-new.jpg\",\n  \"linkUrl\": \"https://example.com/promo-new\",\n  \"priority\": 2,\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/banners/{{bannerId}}"
+          }
+        },
+        {
+          "name": "Delete Banner (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners/{{bannerId}}"
+          }
+        },
+        {
+          "name": "Delete Banner (Permanent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners/{{bannerId}}/permanent"
+          }
+        },
+        {
+          "name": "Revalidate Banners Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/banners/revalidate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Branch Configurations",
+      "item": [
+        {
+          "name": "List Branches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches"
+          }
+        },
+        {
+          "name": "List Branches (Refresh)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches?refresh=true"
+          }
+        },
+        {
+          "name": "Get Branch by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/{{branchId}}"
+          }
+        },
+        {
+          "name": "Get Branch by Spot ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/spot/{{spotId}}"
+          }
+        },
+        {
+          "name": "Create Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main Branch\",\n  \"posterSpotId\": 1,\n  \"address\": \"123 Main Street\",\n  \"latitude\": 41.311081,\n  \"longitude\": 69.240562,\n  \"phone\": \"998901112233\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/branches"
+          }
+        },
+        {
+          "name": "Update Branch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nameEn\": \"Updated Branch Name\",\n  \"addressEn\": \"456 New Street\",\n  \"isActive\": true,\n  \"openTime\": \"08:00\",\n  \"closeTime\": \"23:00\",\n  \"isDeliveryEnabled\": true,\n  \"isPickupEnabled\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/branches/{{branchId}}"
+          }
+        },
+        {
+          "name": "Delete Branch (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/{{branchId}}"
+          }
+        },
+        {
+          "name": "Revalidate All Branches",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/revalidate"
+          }
+        },
+        {
+          "name": "Revalidate Branch by ID",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/{{branchId}}/revalidate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Upload File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/uploads"
+          }
+        },
+        {
+          "name": "Delete Uploaded File",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/uploads/{{fileName}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Send Webhook Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"order.created\",\n  \"data\": {\n    \"orderId\": \"ORDER-123\",\n    \"status\": \"pending\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/webhooks/messages"
+          }
+        },
+        {
+          "name": "Get Webhook Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/webhooks/messages"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Push Notifications (Legacy)",
       "item": [
         {
           "name": "Send Topic Notification",
@@ -613,6 +2013,23 @@
             },
             "url": "{{baseUrl}}/api/posttoposter"
           }
+        },
+        {
+          "name": "Create Incoming Order (Mock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"998901112233\",\n  \"service_mode\": 2,\n  \"comment\": \"Mock order for testing\"\n}"
+            },
+            "url": "{{baseUrl}}/api/posttoposter/mock"
+          }
         }
       ]
     },
@@ -830,6 +2247,22 @@
                 "header": [],
                 "url": "{{baseUrl}}/api/poster/categories/revalidate"
               }
+            },
+            {
+              "name": "Get Promotions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/promotions"
+              }
+            },
+            {
+              "name": "Revalidate Promotions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/poster/promotions/revalidate"
+              }
             }
           ]
         },
@@ -1026,7 +2459,7 @@
       "name": "Support Chat API",
       "item": [
         {
-          "name": "1️⃣ Open Support Chat Thread",
+          "name": "1. Open Support Chat Thread",
           "event": [
             {
               "listen": "test",
@@ -1036,8 +2469,8 @@
                   "if (pm.response.code === 200) {",
                   "    const response = pm.response.json();",
                   "    pm.environment.set('threadId', response.id);",
-                  "    console.log('✅ Thread created:', response.id);",
-                  "    console.log('📝 Recent messages:', response.recentMessages.length);",
+                  "    console.log('Thread created:', response.id);",
+                  "    console.log('Recent messages:', response.recentMessages.length);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1061,7 +2494,7 @@
           }
         },
         {
-          "name": "2️⃣ Connect WebSocket (Customer)",
+          "name": "2. Connect WebSocket (Customer)",
           "event": [
             {
               "listen": "prerequest",
@@ -1072,11 +2505,11 @@
                   "const customerUserId = pm.environment.get('customerUserId');",
                   "",
                   "if (!threadId) {",
-                  "    throw new Error('❌ threadId not set! Run \"1️⃣ Open Support Chat Thread\" first');",
+                  "    throw new Error('threadId not set! Run \"1. Open Support Chat Thread\" first');",
                   "}",
                   "",
-                  "console.log('🔌 Connecting to thread:', threadId);",
-                  "console.log('👤 As user:', customerUserId);"
+                  "console.log('Connecting to thread:', threadId);",
+                  "console.log('As user:', customerUserId);"
                 ],
                 "type": "text/javascript"
               }
@@ -1127,7 +2560,7 @@
           }
         },
         {
-          "name": "3️⃣ Connect WebSocket (Support)",
+          "name": "3. Connect WebSocket (Support)",
           "event": [
             {
               "listen": "prerequest",
@@ -1138,11 +2571,11 @@
                   "const supportUserId = pm.environment.get('supportUserId');",
                   "",
                   "if (!threadId) {",
-                  "    throw new Error('❌ threadId not set! Run \"1️⃣ Open Support Chat Thread\" first');",
+                  "    throw new Error('threadId not set! Run \"1. Open Support Chat Thread\" first');",
                   "}",
                   "",
-                  "console.log('🔌 Support agent connecting to thread:', threadId);",
-                  "console.log('👤 As user:', supportUserId);"
+                  "console.log('Support agent connecting to thread:', threadId);",
+                  "console.log('As user:', supportUserId);"
                 ],
                 "type": "text/javascript"
               }
@@ -1186,7 +2619,7 @@
           }
         },
         {
-          "name": "4️⃣ Get Chat Messages (HTTP)",
+          "name": "4. Get Chat Messages (HTTP)",
           "request": {
             "method": "GET",
             "header": [],
@@ -1212,7 +2645,7 @@
           }
         },
         {
-          "name": "5️⃣ Send Message (HTTP Fallback)",
+          "name": "5. Send Message (HTTP Fallback)",
           "request": {
             "method": "POST",
             "header": [
@@ -1281,6 +2714,59 @@
             "method": "DELETE",
             "header": [],
             "url": "{{baseUrl}}/api/cache/{{cacheKey}}"
+          }
+        },
+        {
+          "name": "Revalidate Poster Resource",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/cache/revalidate/products"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WebSocket Endpoints",
+      "item": [
+        {
+          "name": "Chat WebSocket",
+          "request": {
+            "method": "WEBSOCKET",
+            "header": [],
+            "url": {
+              "raw": "{{wsUrl}}/ws/chat?threadId={{threadId}}&senderId={{customerUserId}}&role=Customer",
+              "host": ["{{wsUrl}}"],
+              "path": ["ws", "chat"],
+              "query": [
+                {
+                  "key": "threadId",
+                  "value": "{{threadId}}"
+                },
+                {
+                  "key": "senderId",
+                  "value": "{{customerUserId}}"
+                },
+                {
+                  "key": "role",
+                  "value": "Customer"
+                }
+              ]
+            },
+            "description": "WebSocket endpoint for real-time chat messaging"
+          }
+        },
+        {
+          "name": "Poster Updates WebSocket",
+          "request": {
+            "method": "WEBSOCKET",
+            "header": [],
+            "url": {
+              "raw": "{{wsUrl}}/ws/poster-updates",
+              "host": ["{{wsUrl}}"],
+              "path": ["ws", "poster-updates"]
+            },
+            "description": "WebSocket endpoint for receiving Poster cache invalidation updates in real-time"
           }
         }
       ]
@@ -1371,6 +2857,76 @@
       "key": "supportUserId",
       "value": "623e4567-e89b-12d3-a456-426614174005",
       "description": "UUID for support agent user account"
+    },
+    {
+      "key": "bannerId",
+      "value": "1",
+      "description": "Banner ID for CRUD operations"
+    },
+    {
+      "key": "branchId",
+      "value": "1",
+      "description": "Branch configuration ID"
+    },
+    {
+      "key": "spotId",
+      "value": "1",
+      "description": "Poster spot ID"
+    },
+    {
+      "key": "fileName",
+      "value": "uploaded-file.jpg",
+      "description": "Uploaded file name for deletion"
+    },
+    {
+      "key": "userId",
+      "value": "USER-123",
+      "description": "User ID for Plum payments"
+    },
+    {
+      "key": "cardId",
+      "value": "CARD-123",
+      "description": "Plum card ID"
+    },
+    {
+      "key": "userCardId",
+      "value": "USER-CARD-123",
+      "description": "Plum user card ID"
+    },
+    {
+      "key": "session",
+      "value": "SESSION-123",
+      "description": "Plum session ID for OTP confirmation"
+    },
+    {
+      "key": "holdId",
+      "value": "HOLD-123",
+      "description": "Plum hold ID"
+    },
+    {
+      "key": "plumTransactionId",
+      "value": "PLUM-TXN-123",
+      "description": "Plum transaction ID"
+    },
+    {
+      "key": "autoPayClientId",
+      "value": "AP-CLIENT-123",
+      "description": "Auto payment client ID"
+    },
+    {
+      "key": "autoPayContractId",
+      "value": "AP-CONTRACT-123",
+      "description": "Auto payment contract ID"
+    },
+    {
+      "key": "jobId",
+      "value": "JOB-123",
+      "description": "Plum job ID for async operations"
+    },
+    {
+      "key": "scoringId",
+      "value": "SCORING-123",
+      "description": "Plum scoring ID"
     }
   ]
 }

@@ -140,6 +140,12 @@ public sealed class CreateOrderRequest
     public string? FcmToken { get; init; }
 
     /// <summary>
+    /// Preferred language for notifications (en, ru, uz)
+    /// </summary>
+    [JsonPropertyName("language")]
+    public string? Language { get; init; }
+
+    /// <summary>
     /// Saved card token for payment
     /// </summary>
     [JsonPropertyName("savedCardToken")]

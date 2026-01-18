@@ -330,9 +330,9 @@ public sealed class BranchConfigurationsController : ControllerBase
 
             _logger.LogInformation("Updated branch configuration {Id}", id);
 
-            // Invalidate both single branch cache AND list cache
-            await _cache.InvalidateBranchConfigByIdAsync(id, cancellationToken);
+            // Invalidate all cache and re-cache the updated branch
             await _cache.InvalidateBranchConfigCacheAsync(cancellationToken);
+            await _cache.SetBranchConfigurationAsync(config, cancellationToken);
             await PublishRevalidationAsync("updated", config, cancellationToken);
 
             return Ok(new SingleBranchConfigurationResponse

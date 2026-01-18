@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Infrastructure.Notifications;
+using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Poster;
@@ -15,15 +17,21 @@ public sealed class PosterBridgeController : ControllerBase
 {
     private readonly PosterService _posterService;
     private readonly AppDbContext _dbContext;
+    private readonly ActiveOrderTracker _orderTracker;
+    private readonly NotificationTokenStore _tokenStore;
     private readonly ILogger<PosterBridgeController> _logger;
 
     public PosterBridgeController(
         PosterService posterService,
         AppDbContext dbContext,
+        ActiveOrderTracker orderTracker,
+        NotificationTokenStore tokenStore,
         ILogger<PosterBridgeController> logger)
     {
         _posterService = posterService;
         _dbContext = dbContext;
+        _orderTracker = orderTracker;
+        _tokenStore = tokenStore;
         _logger = logger;
     }
 
@@ -114,6 +122,8 @@ public sealed class PosterBridgeController : ControllerBase
         _logger.LogInformation("PaymentMethodId: {PaymentMethodId}", request.PaymentMethodId);
         _logger.LogInformation("FcmToken: {FcmToken}", request.FcmToken);
         _logger.LogInformation("Products count: {Count}", request.Products.Count);
+
+        UpdateTokenLanguageFromRequest(request);
 
         foreach (var (product, idx) in request.Products.Select((p, i) => (p, i)))
         {
@@ -249,6 +259,9 @@ public sealed class PosterBridgeController : ControllerBase
             _logger.LogInformation(
                 "Order already exists in DB for Poster order. OrderId {OrderId}, OrderNumber {OrderNumber}, PosterIncomingOrderId {IncomingOrderId}, PosterTransactionId {TransactionId}",
                 existingOrder.Id, existingOrder.OrderNumber, existingOrder.PosterIncomingOrderId, existingOrder.PosterTransactionId);
+
+            existingOrder = await EnsureOrderFcmTokenAsync(existingOrder, request.FcmToken, cancellationToken);
+            TrackOrderForPolling(existingOrder, request.FcmToken);
 
             return Ok(new
             {
@@ -407,6 +420,9 @@ public sealed class PosterBridgeController : ControllerBase
 
             if (retry is not null)
             {
+                retry = await EnsureOrderFcmTokenAsync(retry, request.FcmToken, cancellationToken);
+                TrackOrderForPolling(retry, request.FcmToken);
+
                 return Ok(new
                 {
                     response = new
@@ -490,6 +506,8 @@ public sealed class PosterBridgeController : ControllerBase
                 databaseError = ex.Message
             });
         }
+
+        TrackOrderForPolling(order, request.FcmToken);
 
         return Ok(new
         {
@@ -626,6 +644,8 @@ public sealed class PosterBridgeController : ControllerBase
         _logger.LogInformation("SpotId: {SpotId}, Phone: {Phone}, Products: {Count}",
             request.SpotId, request.Phone, request.Products.Count);
 
+        UpdateTokenLanguageFromRequest(request);
+
         // Generate fake Poster IDs
         var random = new Random();
         var fakeIncomingOrderId = random.Next(10000, 99999).ToString();
@@ -722,6 +742,8 @@ public sealed class PosterBridgeController : ControllerBase
             });
         }
 
+        TrackOrderForPolling(order, request.FcmToken);
+
         // Return response matching the real endpoint format
         return Ok(new
         {
@@ -785,5 +807,122 @@ public sealed class PosterBridgeController : ControllerBase
                 } : null
             }
         });
+    }
+
+    private static bool ShouldTrackOrder(OrderStatus status) =>
+        status is not OrderStatus.Delivered and not OrderStatus.Cancelled;
+
+    private void TrackOrderForPolling(Order order, string? fcmTokenOverride = null)
+    {
+        if (!ShouldTrackOrder(order.Status))
+        {
+            return;
+        }
+
+        var fcmToken = string.IsNullOrWhiteSpace(fcmTokenOverride) ? order.FcmToken : fcmTokenOverride;
+        var language = ResolveLanguage(fcmToken);
+
+        _orderTracker.TrackOrder(new TrackedOrder
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            PosterIncomingOrderId = order.PosterIncomingOrderId,
+            PosterTransactionId = order.PosterTransactionId,
+            FcmToken = fcmToken,
+            Phone = order.Phone,
+            CurrentStatus = order.Status,
+            Language = language
+        });
+    }
+
+    private string ResolveLanguage(string? fcmToken)
+    {
+        if (!string.IsNullOrWhiteSpace(fcmToken) &&
+            _tokenStore.TryGet(fcmToken, out var entry))
+        {
+            var language = entry.Language;
+            if (!string.IsNullOrWhiteSpace(language) && NotificationService.IsLanguageSupported(language))
+            {
+                return language.Trim().ToLowerInvariant();
+            }
+        }
+
+        return "en";
+    }
+
+    private void UpdateTokenLanguageFromRequest(CreateOrderRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FcmToken))
+        {
+            return;
+        }
+
+        var language = ResolveRequestLanguage(request.Language);
+        if (language is null)
+        {
+            return;
+        }
+
+        if (_tokenStore.TryGet(request.FcmToken, out var entry))
+        {
+            _tokenStore.AddOrUpdate(request.FcmToken, entry with
+            {
+                Language = language,
+                UserId = request.UserId ?? entry.UserId
+            });
+            return;
+        }
+
+        _tokenStore.AddOrUpdate(request.FcmToken, new NotificationTokenEntry(
+            language,
+            request.UserId,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null));
+    }
+
+    private static string? ResolveRequestLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            return null;
+        }
+
+        var trimmed = language.Trim().ToLowerInvariant();
+        return NotificationService.IsLanguageSupported(trimmed) ? trimmed : null;
+    }
+
+    private async Task<Order> EnsureOrderFcmTokenAsync(
+        Order order,
+        string? fcmToken,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(fcmToken) ||
+            string.Equals(order.FcmToken, fcmToken, StringComparison.Ordinal))
+        {
+            return order;
+        }
+
+        var tracked = await _dbContext.Orders.FindAsync(new object[] { order.Id }, cancellationToken);
+        if (tracked is null)
+        {
+            return order;
+        }
+
+        try
+        {
+            tracked.FcmToken = fcmToken;
+            tracked.UpdatedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            order.FcmToken = fcmToken;
+            order.UpdatedAt = tracked.UpdatedAt;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update FCM token for order {OrderId}", order.Id);
+        }
+
+        return order;
     }
 }
