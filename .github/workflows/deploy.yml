@@ -70,11 +70,12 @@ jobs:
             else
               for migration_file in $migration_files; do
                 migration_name=$(basename "$migration_file")
+                sql_migration_name=${migration_name//\'/\'\'}
                 case "$migration_name" in
                   00_*) continue ;;
                 esac
 
-                applied=$(docker exec rolling_postgres psql -U postgres -d rolling -tA -v ON_ERROR_STOP=1 -v name="$migration_name" -c "SELECT 1 FROM schema_migrations WHERE migration_name = :'name' LIMIT 1;")
+                applied=$(docker exec rolling_postgres psql -U postgres -d rolling -tA -v ON_ERROR_STOP=1 -c "SELECT 1 FROM schema_migrations WHERE migration_name = '$sql_migration_name' LIMIT 1;")
                 if [ "$applied" = "1" ]; then
                   echo "Migration $migration_name already applied, skipping"
                   continue
@@ -82,7 +83,7 @@ jobs:
 
                 echo "Applying migration $migration_name"
                 docker exec -i rolling_postgres psql -U postgres -d rolling -v ON_ERROR_STOP=1 < "$migration_file"
-                docker exec rolling_postgres psql -U postgres -d rolling -v ON_ERROR_STOP=1 -v name="$migration_name" -c "INSERT INTO schema_migrations (migration_name) VALUES (:'name');"
+                docker exec rolling_postgres psql -U postgres -d rolling -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (migration_name) VALUES ('$sql_migration_name');"
               done
             fi
           else
