@@ -5,6 +5,11 @@ namespace Rolling.Web.Realtime;
 
 public sealed class WebSocketCacheRevalidationPublisher : ICacheRevalidationPublisher
 {
+    private static readonly JsonSerializerOptions RevalidationJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private readonly WebSocketConnectionManager _connections;
     private readonly ILogger<WebSocketCacheRevalidationPublisher> _logger;
 
@@ -26,7 +31,7 @@ public sealed class WebSocketCacheRevalidationPublisher : ICacheRevalidationPubl
             version = payload.Version,
             updatedAt = payload.UpdatedAt.ToString("O"),
             scope = payload.Scope
-        });
+        }, RevalidationJsonOptions);
 
         await _connections.BroadcastAsync(message, cancellationToken);
         _logger.LogInformation(

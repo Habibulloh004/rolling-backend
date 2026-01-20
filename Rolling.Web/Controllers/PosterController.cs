@@ -181,24 +181,9 @@ public class PosterController : ControllerBase
     /// Revalidate clients cache
     /// </summary>
     [HttpPost("clients/revalidate")]
-    public async Task<IActionResult> RevalidateClients([FromQuery] Dictionary<string, string?>? queryParams, CancellationToken cancellationToken)
+    public IActionResult RevalidateClients()
     {
-        try
-        {
-            var result = await _posterService.RevalidateClientsAsync(queryParams, cancellationToken);
-            return Ok(new
-            {
-                message = "Clients cache revalidated",
-                data = result.Data,
-                source = result.Source,
-                cached = result.Cached
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error revalidating clients");
-            return StatusCode(500, new { error = ex.Message });
-        }
+        return BadRequest(new { error = "Client revalidation is disabled." });
     }
 
     /// <summary>
@@ -225,24 +210,9 @@ public class PosterController : ControllerBase
     /// Revalidate specific client cache
     /// </summary>
     [HttpPost("clients/{id}/revalidate")]
-    public async Task<IActionResult> RevalidateClient(string id, CancellationToken cancellationToken)
+    public IActionResult RevalidateClient(string id)
     {
-        try
-        {
-            var result = await _posterService.RevalidateClientAsync(id, cancellationToken);
-            return Ok(new
-            {
-                message = $"Client {id} cache revalidated",
-                data = result.Data,
-                source = result.Source,
-                cached = result.Cached
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error revalidating client {ClientId}", id);
-            return StatusCode(500, new { error = ex.Message });
-        }
+        return BadRequest(new { error = $"Client revalidation is disabled (client: {id})." });
     }
 
     /// <summary>
@@ -525,4 +495,5 @@ public class PosterController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
 }

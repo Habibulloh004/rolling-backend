@@ -182,7 +182,7 @@ public class CacheController : ControllerBase
                 case "employees":
                     return Ok(await _posterCache.RevalidateEmployeesAsync(cancellationToken));
                 case "clients":
-                    return Ok(await _posterCache.RevalidateClientsAsync(null, cancellationToken));
+                    return BadRequest(new { error = "Client revalidation is disabled." });
                 case "transactions":
                     return BadRequest(new { error = "Transactions require query parameters; use /api/poster/transactions/revalidate." });
                 default:

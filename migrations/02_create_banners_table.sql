@@ -27,13 +27,6 @@ CREATE INDEX IF NOT EXISTS idx_banners_is_active ON banners(is_active);
 -- Create index on created_at for faster sorting
 CREATE INDEX IF NOT EXISTS idx_banners_created_at ON banners(created_at DESC);
 
--- Insert sample banners for testing (optional, can be removed)
-INSERT INTO banners (title, subtitle, description, lang, path, image_url, is_active)
-VALUES
-    ('Welcome to Rolling', 'Special Offer', '<p>Get 10% off on your first order!</p>', 'en', '/menu', 'https://rolling.app/assets/banner-en.jpg', true),
-    ('Добро пожаловать в Rolling', 'Специальное предложение', '<p>Получите скидку 10% на первый заказ!</p>', 'ru', '/menu', 'https://rolling.app/assets/banner-ru.jpg', true),
-    ('Rolling''ga xush kelibsiz', 'Maxsus taklif', '<p>Birinchi buyurtmangizda 10% chegirma oling!</p>', 'uz', '/menu', 'https://rolling.app/assets/banner-uz.jpg', true);
-
 COMMENT ON TABLE banners IS 'Marketing banners displayed in the mobile app';
 COMMENT ON COLUMN banners.id IS 'Primary key';
 COMMENT ON COLUMN banners.title IS 'Banner title';
