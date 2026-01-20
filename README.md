@@ -4,6 +4,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project Rolling.Web/Rolling.Web.
 
 ASPNETCORE_ENVIRONMENT=Development dotnet watch --project rolling-back/Rolling.Web/Rolling.Web.csproj
 
+some changes
 
 
 # Rolling
