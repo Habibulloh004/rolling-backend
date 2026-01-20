@@ -275,23 +275,32 @@ public sealed class PaymeService
         return elapsedMinutes < ExpirationMinutes;
     }
 
-    private static PaymeTransactionInfo MapTransactionInfo(PaymentTransaction transaction) =>
-        new(transaction.TransactionId ?? string.Empty,
+    private static PaymeTransactionInfo MapTransactionInfo(PaymentTransaction transaction)
+    {
+        // According to Payme spec:
+        // - perform_time should be 0 if transaction hasn't been performed (state < 2)
+        // - cancel_time should be 0 if transaction hasn't been cancelled (state > 0)
+        var performTime = transaction.Status >= (int)TransactionState.Paid ? transaction.PerformTime : 0;
+        var cancelTime = transaction.Status < 0 ? transaction.CancelTime : 0;
+
+        return new PaymeTransactionInfo(
+            transaction.TransactionId ?? string.Empty,
             transaction.CreateTime,
-            transaction.PerformTime,
-            transaction.CancelTime,
+            performTime,
+            cancelTime,
             transaction.Status,
             transaction.Reason);
+    }
 
     public sealed record PaymeAccount([property: JsonPropertyName("order_id")] string OrderId);
 
     public sealed record PaymeCheckPerformParams(long Amount, PaymeAccount Account);
 
-    public sealed record PaymeCreateTransactionParams(string Id, long Amount, PaymeAccount Account, long Time);
+    public sealed record PaymeCreateTransactionParams([property: JsonConverter(typeof(FlexibleStringConverter))] string Id, long Amount, PaymeAccount Account, long Time);
 
-    public sealed record PaymeTransactionIdParams(string Id);
+    public sealed record PaymeTransactionIdParams([property: JsonConverter(typeof(FlexibleStringConverter))] string Id);
 
-    public sealed record PaymeCancelTransactionParams(string Id, int Reason);
+    public sealed record PaymeCancelTransactionParams([property: JsonConverter(typeof(FlexibleStringConverter))] string Id, int Reason);
 
     public sealed record PaymeStatementParams(long From, long To);
 
