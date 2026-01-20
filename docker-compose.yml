@@ -1,3 +1,5 @@
+name: rolling-backend
+
 services:
   rolling-api:
     build:
