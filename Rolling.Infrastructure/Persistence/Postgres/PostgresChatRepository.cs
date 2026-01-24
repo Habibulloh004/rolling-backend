@@ -109,4 +109,42 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
 
         return entities.Select(entity => entity.ToDomain()).ToList();
     }
+
+    public async Task<IReadOnlyList<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber)>> GetAllWithLastMessageAsync(int take, int skip, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var length = Math.Clamp(take, 1, 100);
+
+        // Get threads with their last message using a subquery
+        var threads = await _dbContext.ChatThreads
+            .Include(t => t.Participants)
+            .AsNoTracking()
+            .OrderByDescending(t => t.UpdatedAt)
+            .Skip(skip)
+            .Take(length)
+            .ToListAsync(cancellationToken);
+
+        var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber)>();
+
+        foreach (var thread in threads)
+        {
+            var lastMessage = await _dbContext.ChatMessages
+                .AsNoTracking()
+                .Where(m => m.ThreadId == thread.Id)
+                .OrderByDescending(m => m.SentAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            // Look up order number from orders table
+            var orderIdString = thread.OrderId.ToString();
+            var order = await _dbContext.Orders
+                .AsNoTracking()
+                .Where(o => o.Id == orderIdString)
+                .Select(o => new { o.OrderNumber })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            result.Add((thread.ToDomain(), lastMessage?.ToDomain(), order?.OrderNumber));
+        }
+
+        return result;
+    }
 }

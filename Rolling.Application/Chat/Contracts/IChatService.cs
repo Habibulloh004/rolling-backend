@@ -11,4 +11,6 @@ public interface IChatService
     Task<ChatMessageDto> SendAsync(SendChatMessageCommand command, CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<ChatMessageDto>> GetMessagesAsync(GetChatMessagesQuery query, CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<ChatThreadPreviewDto>> GetThreadsAsync(int take, int skip, CancellationToken cancellationToken);
 }

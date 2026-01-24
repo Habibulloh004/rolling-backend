@@ -143,4 +143,31 @@ public sealed class ChatService : IChatService
             message.Body,
             message.SentAt,
             message.Status);
+
+    public async Task<IReadOnlyCollection<ChatThreadPreviewDto>> GetThreadsAsync(int take, int skip, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var threadsWithMessages = await _threadRepository.GetAllWithLastMessageAsync(take, skip, cancellationToken);
+
+        return threadsWithMessages.Select(item =>
+        {
+            var thread = item.Thread;
+            var lastMessage = item.LastMessage;
+            var orderNumber = item.OrderNumber;
+            var customerName = thread.Participants
+                .FirstOrDefault(p => p.Role == ChatParticipantRole.Customer)?.DisplayName;
+
+            return new ChatThreadPreviewDto(
+                thread.Id,
+                thread.OrderId,
+                orderNumber,
+                thread.CustomerId,
+                customerName,
+                lastMessage?.Body,
+                lastMessage?.SentAt,
+                0, // UnreadCount - can be implemented later
+                thread.CreatedAt);
+        }).ToList();
+    }
 }

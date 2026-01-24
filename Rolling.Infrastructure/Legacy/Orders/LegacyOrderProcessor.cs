@@ -77,7 +77,7 @@ public sealed class OrderProcessor
         var response = await _posterService.CreateIncomingOrderAsync(root, cancellationToken);
         var transactionId = response?.RootElement.TryGetProperty("response", out var resp) == true &&
                             resp.TryGetProperty("transaction_id", out var txElement)
-            ? txElement.GetString()
+            ? GetStringOrNumber(txElement)
             : null;
 
         var totalAmount = service == "waiter" ? amount + (amount * 0.1m) : amount;
@@ -100,8 +100,18 @@ public sealed class OrderProcessor
         var response = await _posterService.CreateIncomingOrderAsync(orderDetails.RootElement, cancellationToken);
         var transactionId = response?.RootElement.TryGetProperty("response", out var resp) == true &&
                             resp.TryGetProperty("transaction_id", out var txElement)
-            ? txElement.GetString()
+            ? GetStringOrNumber(txElement)
             : null;
         return transactionId;
+    }
+
+    private static string? GetStringOrNumber(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            _ => null
+        };
     }
 }

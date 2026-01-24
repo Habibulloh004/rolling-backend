@@ -23,6 +23,23 @@ public sealed class ChatController : ControllerBase
         _logger = logger;
     }
 
+    [HttpGet("chat/threads")]
+    public async Task<IActionResult> GetThreads(
+        [FromQuery] int take = 20,
+        [FromQuery] int skip = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var threads = await _chatService.GetThreadsAsync(take, skip, cancellationToken);
+        return Ok(threads);
+    }
+
+    [HttpGet("chat/active")]
+    public IActionResult GetActiveThreads()
+    {
+        var activeThreadIds = _coordinator.GetActiveThreadIds();
+        return Ok(activeThreadIds);
+    }
+
     [HttpPost("orders/{orderId:guid}/chat")]
     public async Task<IActionResult> OpenThread(
         Guid orderId,

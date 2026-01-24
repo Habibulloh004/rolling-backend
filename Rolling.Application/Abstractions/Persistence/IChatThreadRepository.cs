@@ -11,4 +11,6 @@ public interface IChatThreadRepository
     Task<ChatThread> AddAsync(ChatThread thread, IEnumerable<ChatParticipant> participants, CancellationToken cancellationToken);
 
     Task UpdateStatusAsync(Guid threadId, ChatThreadStatus status, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber)>> GetAllWithLastMessageAsync(int take, int skip, CancellationToken cancellationToken);
 }

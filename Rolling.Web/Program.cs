@@ -22,6 +22,16 @@ ConfigureKestrelLimits(builder);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllersWithViews();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AdminCors", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:3000", "http://localhost:3001")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     // Allow controllers (especially Payme JSON-RPC) to handle invalid models manually,
@@ -32,8 +42,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<WebSocketConnectionManager>();
 builder.Services.AddSingleton<ICacheRevalidationPublisher, WebSocketCacheRevalidationPublisher>();
+builder.Services.AddSingleton<AdminChatCoordinator>();
 builder.Services.AddSingleton<ChatRealtimeCoordinator>();
 builder.Services.AddScoped<ChatSocketHandler>();
+builder.Services.AddScoped<AdminChatSocketHandler>();
 builder.Services.AddScoped<PosterUpdatesSocketHandler>();
 builder.Services.AddHostedService<NotificationCleanupService>();
 builder.Services.AddHostedService<PosterCacheRefreshService>();
@@ -92,6 +104,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseRouting();
+app.UseCors("AdminCors");
 app.UseMiddleware<RouteUsageMiddleware>();
 app.UseAuthorization();
 app.UseWebSockets();
@@ -106,6 +119,15 @@ app.Map("/ws/chat", builder =>
     builder.Run(async context =>
     {
         var handler = context.RequestServices.GetRequiredService<ChatSocketHandler>();
+        await handler.HandleAsync(context);
+    });
+});
+
+app.Map("/ws/admin/chat", builder =>
+{
+    builder.Run(async context =>
+    {
+        var handler = context.RequestServices.GetRequiredService<AdminChatSocketHandler>();
         await handler.HandleAsync(context);
     });
 });

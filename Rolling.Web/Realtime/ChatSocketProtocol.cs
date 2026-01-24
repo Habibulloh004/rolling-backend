@@ -18,6 +18,12 @@ internal static class ChatSocketProtocol
         return JsonSerializer.Serialize(envelope, SerializerOptions);
     }
 
+    public static string SerializePresence(Guid threadId, bool isOnline)
+    {
+        var envelope = new ChatSocketPresence("presence", new PresencePayload(threadId, isOnline));
+        return JsonSerializer.Serialize(envelope, SerializerOptions);
+    }
+
     public static ChatSocketEnvelope? DeserializeEnvelope(string payload)
     {
         return JsonSerializer.Deserialize<ChatSocketEnvelope>(payload, SerializerOptions);
@@ -28,4 +34,8 @@ internal static class ChatSocketProtocol
     internal sealed record ChatSocketInbound(ChatMessageContentType ContentType, string Body);
 
     private sealed record ChatSocketBroadcast(string Type, ChatMessageDto Payload, string? ClientMessageId);
+
+    private sealed record ChatSocketPresence(string Type, PresencePayload Payload);
+
+    private sealed record PresencePayload(Guid ThreadId, bool IsOnline);
 }

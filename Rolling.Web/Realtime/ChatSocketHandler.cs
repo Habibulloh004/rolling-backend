@@ -42,7 +42,7 @@ public sealed class ChatSocketHandler
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         var socket = await context.WebSockets.AcceptWebSocketAsync();
-        var connectionId = _coordinator.Add(threadId, socket);
+        var connectionId = await _coordinator.AddAsync(threadId, socket, role);
 
         _logger.LogInformation("WebSocket connected to chat thread {ThreadId} ({ConnectionId})", threadId, connectionId);
 
@@ -124,6 +124,8 @@ public sealed class ChatSocketHandler
             var message = await _chatService.SendAsync(command, cancellationToken);
             var serialized = ChatSocketProtocol.SerializeBroadcast(message, envelope.ClientMessageId);
             await _coordinator.BroadcastAsync(threadId, serialized, cancellationToken);
+            // Also broadcast to global admin connections
+            await _coordinator.BroadcastMessageToGlobalAdminsAsync(serialized);
         }
     }
 
