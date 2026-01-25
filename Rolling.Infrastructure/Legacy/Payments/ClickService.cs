@@ -216,28 +216,43 @@ public sealed class ClickService
 
     public async Task<ClickCheckoutResult> CheckoutAsync(ClickCheckoutRequest request, CancellationToken cancellationToken)
     {
+        var orderDetailsJson = request.OrderDetails?.ValueKind == JsonValueKind.Object
+            ? request.OrderDetails.Value.GetRawText()
+            : "{}";
+        var now = DateTime.UtcNow;
+        var cutoffMillis = DateTimeOffset.UtcNow.AddMinutes(-15).ToUnixTimeMilliseconds();
+
+        var pendingQuery = _dbContext.Transactions
+            .AsNoTracking()
+            .Where(x =>
+                x.Provider == "click" &&
+                x.Status == (int)TransactionState.Pending &&
+                x.CreateTime > cutoffMillis &&
+                x.Amount == request.Amount &&
+                x.OrderDetailsJson == orderDetailsJson);
+
         if (!string.IsNullOrWhiteSpace(request.UserId))
         {
-            var pending = await _dbContext.Transactions
-                .Where(x =>
-                    x.UserId == request.UserId &&
-                    x.Provider == "click" &&
-                    x.Status == (int)TransactionState.Pending)
-                .ToListAsync(cancellationToken);
-
-            if (pending.Count > 0)
-            {
-                _dbContext.Transactions.RemoveRange(pending);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
+            pendingQuery = pendingQuery.Where(x => x.UserId == request.UserId);
+        }
+        else
+        {
+            pendingQuery = pendingQuery.Where(x => x.UserId == null || x.UserId == string.Empty);
         }
 
-        var now = DateTime.UtcNow;
+        var existing = await pendingQuery
+            .OrderByDescending(x => x.CreateTime)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existing is not null)
+        {
+            var checkoutUrl = BuildCheckoutUrl(existing.Id, request.Amount, request.Url, request.OrderDetails);
+            return new ClickCheckoutResult(checkoutUrl, existing.Id);
+        }
+
         var orderDoc = new PaymentTransaction
         {
-            OrderDetailsJson = request.OrderDetails?.ValueKind == JsonValueKind.Object
-                ? request.OrderDetails.Value.GetRawText()
-                : "{}",
+            OrderDetailsJson = orderDetailsJson,
             Status = (int)TransactionState.Pending,
             Amount = request.Amount,
             Provider = "click",
@@ -251,16 +266,21 @@ public sealed class ClickService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(_dbContext, orderDoc, request.OrderDetails, cancellationToken);
 
-        var baseUrl = request.Url ?? string.Empty;
-        if (TryGetServiceMode(request.OrderDetails, out var serviceMode) && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))
-        {
-            baseUrl = $"{baseUrl.TrimEnd('/')}/{orderDoc.Id}";
-        }
-
-        var checkoutUrl =
-            $"{_options.CheckoutBaseUrl}?service_id={_options.ServiceId}&merchant_id={_options.MerchantId}&amount={request.Amount:0.##}&transaction_param={orderDoc.Id}&merchant_order_id={_options.MerchantUserId}&return_url={Uri.EscapeDataString(baseUrl)}";
+        var checkoutUrl = BuildCheckoutUrl(orderDoc.Id, request.Amount, request.Url, request.OrderDetails);
 
         return new ClickCheckoutResult(checkoutUrl, orderDoc.Id);
+    }
+
+    private string BuildCheckoutUrl(string transactionId, decimal amount, string? returnUrl, JsonElement? orderDetails)
+    {
+        var baseUrl = returnUrl ?? string.Empty;
+        if (TryGetServiceMode(orderDetails, out var serviceMode) && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))
+        {
+            baseUrl = $"{baseUrl.TrimEnd('/')}/{transactionId}";
+        }
+
+        return
+            $"{_options.CheckoutBaseUrl}?service_id={_options.ServiceId}&merchant_id={_options.MerchantId}&amount={amount:0.##}&transaction_param={transactionId}&merchant_order_id={_options.MerchantUserId}&return_url={Uri.EscapeDataString(baseUrl)}";
     }
 
     private static bool TryGetServiceMode(JsonElement? doc, out int serviceMode)
