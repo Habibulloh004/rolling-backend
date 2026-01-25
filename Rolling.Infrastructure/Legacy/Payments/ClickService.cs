@@ -246,8 +246,8 @@ public sealed class ClickService
 
         if (existing is not null)
         {
-            var checkoutUrl = BuildCheckoutUrl(existing.Id, request.Amount, request.Url, request.OrderDetails);
-            return new ClickCheckoutResult(checkoutUrl, existing.Id);
+            var existingCheckoutUrl = BuildCheckoutUrl(existing.Id, request.Amount, request.Url, request.OrderDetails);
+            return new ClickCheckoutResult(existingCheckoutUrl, existing.Id);
         }
 
         var orderDoc = new PaymentTransaction
