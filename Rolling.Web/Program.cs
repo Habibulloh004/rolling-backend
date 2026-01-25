@@ -50,6 +50,7 @@ builder.Services.AddScoped<PosterUpdatesSocketHandler>();
 builder.Services.AddHostedService<NotificationCleanupService>();
 builder.Services.AddHostedService<PosterCacheRefreshService>();
 builder.Services.AddHostedService<OrderStatusPollingService>();
+builder.Services.AddHostedService<PaymentExpirationService>();
 builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
 builder.Services.AddSingleton<IWebhookMessageStore, InMemoryWebhookMessageStore>();

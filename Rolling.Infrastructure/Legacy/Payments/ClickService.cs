@@ -249,6 +249,7 @@ public sealed class ClickService
 
         await _dbContext.Transactions.AddAsync(orderDoc, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(_dbContext, orderDoc, request.OrderDetails, cancellationToken);
 
         var baseUrl = request.Url ?? string.Empty;
         if (TryGetServiceMode(request.OrderDetails, out var serviceMode) && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))

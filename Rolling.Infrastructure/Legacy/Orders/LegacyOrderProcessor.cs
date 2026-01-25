@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Poster;
+using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 
 namespace Rolling.Infrastructure.Orders;
@@ -10,15 +11,18 @@ public sealed class OrderProcessor
 {
     private readonly PosterService _posterService;
     private readonly TelegramService _telegramService;
+    private readonly AppDbContext _dbContext;
     private readonly ILogger<OrderProcessor> _logger;
 
     public OrderProcessor(
         PosterService posterService,
         TelegramService telegramService,
+        AppDbContext dbContext,
         ILogger<OrderProcessor> logger)
     {
         _posterService = posterService;
         _telegramService = telegramService;
+        _dbContext = dbContext;
         _logger = logger;
     }
 
@@ -36,12 +40,27 @@ public sealed class OrderProcessor
             return null;
         }
 
-        return serviceMode switch
+        var result = serviceMode switch
         {
             1 => await HandleVenueOrderAsync(orderDetails, order.Amount, cancellationToken),
             2 or 3 => await HandleDeliveryOrderAsync(orderDetails, cancellationToken),
             _ => null
         };
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        await PaymentOrderBuilder.EnsurePaidOrderAsync(
+            _dbContext,
+            order,
+            orderDetails.RootElement,
+            result.TransactionId,
+            result.IncomingOrderId,
+            cancellationToken);
+
+        return result.TransactionId ?? result.IncomingOrderId;
     }
 
     private static bool TryGetServiceMode(JsonElement root, out int serviceMode)
@@ -67,18 +86,19 @@ public sealed class OrderProcessor
         return false;
     }
 
-    private async Task<string?> HandleVenueOrderAsync(JsonDocument orderDetails, decimal amount, CancellationToken cancellationToken)
+    private async Task<PosterOrderResult?> HandleVenueOrderAsync(JsonDocument orderDetails, decimal amount, CancellationToken cancellationToken)
     {
         var root = orderDetails.RootElement;
         var comment = root.TryGetProperty("comment", out var commentElement) ? commentElement.GetString() ?? string.Empty : string.Empty;
         var spotName = root.TryGetProperty("spot_name", out var spotNameElement) ? spotNameElement.GetString() ?? string.Empty : string.Empty;
         var service = root.TryGetProperty("service", out var serviceElement) ? serviceElement.GetString() : null;
 
-        var response = await _posterService.CreateIncomingOrderAsync(root, cancellationToken);
-        var transactionId = response?.RootElement.TryGetProperty("response", out var resp) == true &&
-                            resp.TryGetProperty("transaction_id", out var txElement)
-            ? GetStringOrNumber(txElement)
-            : null;
+        using var response = await _posterService.CreateIncomingOrderAsync(root, cancellationToken);
+        var result = ExtractPosterIds(response);
+        if (result is null)
+        {
+            return null;
+        }
 
         var totalAmount = service == "waiter" ? amount + (amount * 0.1m) : amount;
         var message = $"""
@@ -92,17 +112,13 @@ public sealed class OrderProcessor
 """;
 
         await _telegramService.SendMessageAsync(message, cancellationToken);
-        return transactionId;
+        return result;
     }
 
-    private async Task<string?> HandleDeliveryOrderAsync(JsonDocument orderDetails, CancellationToken cancellationToken)
+    private async Task<PosterOrderResult?> HandleDeliveryOrderAsync(JsonDocument orderDetails, CancellationToken cancellationToken)
     {
-        var response = await _posterService.CreateIncomingOrderAsync(orderDetails.RootElement, cancellationToken);
-        var transactionId = response?.RootElement.TryGetProperty("response", out var resp) == true &&
-                            resp.TryGetProperty("transaction_id", out var txElement)
-            ? GetStringOrNumber(txElement)
-            : null;
-        return transactionId;
+        using var response = await _posterService.CreateIncomingOrderAsync(orderDetails.RootElement, cancellationToken);
+        return ExtractPosterIds(response);
     }
 
     private static string? GetStringOrNumber(JsonElement element)
@@ -114,4 +130,31 @@ public sealed class OrderProcessor
             _ => null
         };
     }
+
+    private static PosterOrderResult? ExtractPosterIds(JsonDocument? response)
+    {
+        if (response is null)
+        {
+            return null;
+        }
+
+        var transactionId = response.RootElement.TryGetProperty("response", out var resp) &&
+                            resp.TryGetProperty("transaction_id", out var txElement)
+            ? GetStringOrNumber(txElement)
+            : null;
+
+        var incomingOrderId = response.RootElement.TryGetProperty("response", out resp) &&
+                              resp.TryGetProperty("incoming_order_id", out var incomingElement)
+            ? GetStringOrNumber(incomingElement)
+            : null;
+
+        if (string.IsNullOrWhiteSpace(transactionId) && string.IsNullOrWhiteSpace(incomingOrderId))
+        {
+            return null;
+        }
+
+        return new PosterOrderResult(transactionId, incomingOrderId);
+    }
+
+    private sealed record PosterOrderResult(string? TransactionId, string? IncomingOrderId);
 }
