@@ -33,7 +33,6 @@ public sealed class PaymeService
 
     public async Task CheckPerformTransactionAsync(PaymeCheckPerformParams parameters, string? id, CancellationToken cancellationToken)
     {
-        var amount = NormalizeAmount(parameters.Amount);
         var order = await _dbContext.Transactions
             .AsNoTracking()
             .FirstOrDefaultAsync(x =>
@@ -46,7 +45,8 @@ public sealed class PaymeService
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
-        if (order.Amount != amount)
+        var expectedAmount = ToPaymeAmount(order.Amount);
+        if (expectedAmount != parameters.Amount)
         {
             throw new PaymentTransactionException(PaymeErrors.InvalidAmount, id);
         }
@@ -207,7 +207,7 @@ public sealed class PaymeService
         return transactions.Select(transaction => new PaymeStatementItem(
             transaction.TransactionId ?? string.Empty,
             transaction.CreateTime,
-            (long)transaction.Amount,
+            ToPaymeAmount(transaction.Amount),
             transaction.Id,
             transaction.CreateTime,
             transaction.PerformTime,
@@ -219,6 +219,7 @@ public sealed class PaymeService
 
     public async Task<PaymeCheckoutResult> CreateCheckoutAsync(PaymeCheckoutRequest request, CancellationToken cancellationToken)
     {
+        var normalizedAmount = NormalizeAmount(request.Amount);
         if (!string.IsNullOrWhiteSpace(request.UserId))
         {
             var pending = await _dbContext.Transactions
@@ -243,7 +244,7 @@ public sealed class PaymeService
                 : "{}",
             Status = 0,
             Provider = "payme",
-            Amount = request.Amount,
+            Amount = normalizedAmount,
             UserId = request.UserId,
             CreatedAt = now,
             UpdatedAt = now,
@@ -260,7 +261,7 @@ public sealed class PaymeService
             baseUrl = $"{baseUrl.TrimEnd('/')}/{orderDoc.Id}";
         }
 
-        var amountForPayme = (long)(request.Amount * 100);
+        var amountForPayme = ToPaymeAmount(normalizedAmount);
         var payload = $"m={_options.MerchantId};ac.order_id={orderDoc.Id};a={amountForPayme};c={baseUrl}";
         var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload));
 
@@ -268,7 +269,11 @@ public sealed class PaymeService
         return new PaymeCheckoutResult(checkoutUrl, orderDoc.Id);
     }
 
-    private static decimal NormalizeAmount(long amount) => Math.Floor(amount / 100m);
+    private static decimal NormalizeAmount(decimal amount) =>
+        Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+
+    private static long ToPaymeAmount(decimal amount) =>
+        (long)Math.Round(amount * 100m, 0, MidpointRounding.AwayFromZero);
 
     private static bool IsWithinExpiration(long createTime, long currentTime)
     {
