@@ -59,20 +59,9 @@ public sealed class ClickService
             return ClickPrepareResponse.Failure(ClickErrorCodes.ActionNotFound, "Action not found");
         }
 
-        if (!string.IsNullOrWhiteSpace(order.UserId))
+        if (order.Status == (int)TransactionState.Paid)
         {
-            var alreadyPaid = await _dbContext.Transactions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.UserId == order.UserId &&
-                    x.Provider == "click" &&
-                    x.Status == (int)TransactionState.Paid,
-                    cancellationToken);
-
-            if (alreadyPaid is not null)
-            {
-                return ClickPrepareResponse.Failure(ClickErrorCodes.AlreadyPaid, "Already paid");
-            }
+            return ClickPrepareResponse.Failure(ClickErrorCodes.AlreadyPaid, "Already paid");
         }
 
         if (request.Amount != order.Amount)
@@ -144,20 +133,9 @@ public sealed class ClickService
             return ClickCompleteResponse.Failure(ClickErrorCodes.TransactionNotFound, "Transaction not found");
         }
 
-        if (!string.IsNullOrWhiteSpace(order.UserId))
+        if (order.Status == (int)TransactionState.Paid)
         {
-            var alreadyPaid = await _dbContext.Transactions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.UserId == order.UserId &&
-                    x.Provider == "click" &&
-                    x.Status == (int)TransactionState.Paid,
-                    cancellationToken);
-
-            if (alreadyPaid is not null)
-            {
-                return ClickCompleteResponse.Failure(ClickErrorCodes.AlreadyPaid, "Already paid for course");
-            }
+            return ClickCompleteResponse.Failure(ClickErrorCodes.AlreadyPaid, "Already paid");
         }
 
         if (request.Amount != order.Amount)
