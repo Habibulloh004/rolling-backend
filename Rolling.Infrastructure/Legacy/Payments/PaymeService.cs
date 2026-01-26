@@ -12,7 +12,7 @@ namespace Rolling.Infrastructure.Payments;
 
 public sealed class PaymeService
 {
-    private const int ExpirationMinutes = 12;
+    private const int ExpirationMinutes = 12; // 12 hours minutes
 
     private readonly AppDbContext _dbContext;
     private readonly PaymeOptions _options;
@@ -33,33 +33,65 @@ public sealed class PaymeService
 
     public async Task CheckPerformTransactionAsync(PaymeCheckPerformParams parameters, string? id, CancellationToken cancellationToken)
     {
+        var orderId = parameters.Account.OrderId ?? string.Empty;
+        var amount = NormalizeAmount(parameters.Amount);
         var order = await _dbContext.Transactions
             .AsNoTracking()
             .FirstOrDefaultAsync(x =>
-                x.Id == parameters.Account.OrderId &&
+                x.Id == orderId &&
                 x.Provider == "payme",
                 cancellationToken);
 
         if (order is null)
         {
+            var orderIdLower = orderId.ToLower();
+            var caseInsensitiveOrder = await _dbContext.Transactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Provider == "payme" &&
+                    x.Id.ToLower() == orderIdLower,
+                    cancellationToken);
+
+            _logger.LogWarning(
+                "[Payme] CheckPerformTransaction failed: order not found. OrderId={OrderId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
+                orderId,
+                caseInsensitiveOrder?.Id);
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
-        var expectedAmount = ToPaymeAmount(order.Amount);
-        if (expectedAmount != parameters.Amount)
+        if (order.Amount != amount)
         {
+            _logger.LogWarning(
+                "[Payme] CheckPerformTransaction failed: amount mismatch. OrderId={OrderId} ExpectedAmount={ExpectedAmount} ReceivedAmount={ReceivedAmount} RawAmount={RawAmount}",
+                order.Id,
+                order.Amount,
+                amount,
+                parameters.Amount);
             throw new PaymentTransactionException(PaymeErrors.InvalidAmount, id);
         }
     }
 
     public async Task<PaymeTransactionInfo> CheckTransactionAsync(PaymeTransactionIdParams parameters, string? id, CancellationToken cancellationToken)
     {
+        var transactionId = parameters.Id ?? string.Empty;
         var transaction = await _dbContext.Transactions
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.TransactionId == parameters.Id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.TransactionId == transactionId, cancellationToken);
 
         if (transaction is null)
         {
+            var transactionIdLower = transactionId.ToLower();
+            var caseInsensitiveTransaction = await _dbContext.Transactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.TransactionId != null &&
+                    x.TransactionId.ToLower() == transactionIdLower,
+                    cancellationToken);
+
+            _logger.LogWarning(
+                "[Payme] CheckTransaction failed: transaction not found. TransactionId={TransactionId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
+                transactionId,
+                caseInsensitiveTransaction?.TransactionId);
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
@@ -68,22 +100,33 @@ public sealed class PaymeService
 
     public async Task<PaymeTransactionInfo> CreateTransactionAsync(PaymeCreateTransactionParams parameters, string? id, CancellationToken cancellationToken)
     {
+        var orderId = parameters.Account.OrderId ?? string.Empty;
+        var transactionId = parameters.Id ?? string.Empty;
         await CheckPerformTransactionAsync(new PaymeCheckPerformParams(parameters.Amount, parameters.Account), id, cancellationToken);
 
         var currentTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var existingTransaction = await _dbContext.Transactions
-            .FirstOrDefaultAsync(x => x.TransactionId == parameters.Id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.TransactionId == transactionId, cancellationToken);
 
         if (existingTransaction is not null)
         {
             if (existingTransaction.Status != (int)TransactionState.Pending)
             {
+                _logger.LogWarning(
+                    "[Payme] CreateTransaction rejected: existing transaction not pending. TransactionId={TransactionId} Status={Status}",
+                    transactionId,
+                    existingTransaction.Status);
                 throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
             }
 
             if (!IsWithinExpiration(existingTransaction.CreateTime, currentTime))
             {
+                _logger.LogWarning(
+                    "[Payme] CreateTransaction rejected: existing transaction expired. TransactionId={TransactionId} CreateTime={CreateTime} CurrentTime={CurrentTime}",
+                    transactionId,
+                    existingTransaction.CreateTime,
+                    currentTime);
                 existingTransaction.Status = (int)TransactionState.PendingCanceled;
                 existingTransaction.Reason = 4;
                 existingTransaction.UpdatedAt = DateTime.UtcNow;
@@ -95,40 +138,79 @@ public sealed class PaymeService
         }
 
         var originalOrder = await _dbContext.Transactions
-            .FirstOrDefaultAsync(x => x.Id == parameters.Account.OrderId && x.Provider == "payme", cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == orderId && x.Provider == "payme", cancellationToken);
 
         if (originalOrder is null)
         {
+            var orderIdLower = orderId.ToLower();
+            var caseInsensitiveOrder = await _dbContext.Transactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Provider == "payme" &&
+                    x.Id.ToLower() == orderIdLower,
+                    cancellationToken);
+
+            _logger.LogWarning(
+                "[Payme] CreateTransaction failed: order not found. OrderId={OrderId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
+                orderId,
+                caseInsensitiveOrder?.Id);
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
         if (originalOrder.Status == (int)TransactionState.Paid)
         {
+            _logger.LogWarning(
+                "[Payme] CreateTransaction rejected: order already paid. OrderId={OrderId} Status={Status}",
+                originalOrder.Id,
+                originalOrder.Status);
             throw new PaymentTransactionException(PaymeErrors.AlreadyDone, id);
         }
 
         if (originalOrder.Status == (int)TransactionState.Pending)
         {
+            _logger.LogWarning(
+                "[Payme] CreateTransaction rejected: order already pending. OrderId={OrderId} Status={Status}",
+                originalOrder.Id,
+                originalOrder.Status);
             throw new PaymentTransactionException(PaymeErrors.Pending, id);
         }
 
-        originalOrder.TransactionId = parameters.Id;
+        originalOrder.TransactionId = transactionId;
         originalOrder.Status = (int)TransactionState.Pending;
         originalOrder.CreateTime = parameters.Time;
         originalOrder.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        _logger.LogInformation(
+            "[Payme] CreateTransaction linked order. OrderId={OrderId} TransactionId={TransactionId} CreateTime={CreateTime}",
+            originalOrder.Id,
+            transactionId,
+            originalOrder.CreateTime);
+
         return MapTransactionInfo(originalOrder);
     }
 
     public async Task<PaymeTransactionInfo> PerformTransactionAsync(PaymeTransactionIdParams parameters, string? id, CancellationToken cancellationToken)
     {
+        var transactionId = parameters.Id ?? string.Empty;
         var transaction = await _dbContext.Transactions
-            .FirstOrDefaultAsync(x => x.TransactionId == parameters.Id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.TransactionId == transactionId, cancellationToken);
 
         if (transaction is null)
         {
+            var transactionIdLower = transactionId.ToLower();
+            var caseInsensitiveTransaction = await _dbContext.Transactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.TransactionId != null &&
+                    x.TransactionId.ToLower() == transactionIdLower,
+                    cancellationToken);
+
+            _logger.LogWarning(
+                "[Payme] PerformTransaction failed: transaction not found. TransactionId={TransactionId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
+                transactionId,
+                caseInsensitiveTransaction?.TransactionId);
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
@@ -136,15 +218,27 @@ public sealed class PaymeService
         {
             if (transaction.Status != (int)TransactionState.Paid)
             {
+                _logger.LogWarning(
+                    "[Payme] PerformTransaction rejected: invalid state. TransactionId={TransactionId} Status={Status}",
+                    transactionId,
+                    transaction.Status);
                 throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
             }
 
+            _logger.LogInformation(
+                "[Payme] PerformTransaction skipped: already paid. TransactionId={TransactionId}",
+                transactionId);
             return MapTransactionInfo(transaction);
         }
 
         var currentTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (!IsWithinExpiration(transaction.CreateTime, currentTime))
         {
+            _logger.LogWarning(
+                "[Payme] PerformTransaction rejected: transaction expired. TransactionId={TransactionId} CreateTime={CreateTime} CurrentTime={CurrentTime}",
+                transactionId,
+                transaction.CreateTime,
+                currentTime);
             transaction.Status = (int)TransactionState.PendingCanceled;
             transaction.Reason = 4;
             transaction.CancelTime = currentTime;
@@ -154,6 +248,13 @@ public sealed class PaymeService
         }
 
         var processedOrderId = await _orderProcessor.ProcessAsync(transaction, cancellationToken);
+        if (string.IsNullOrWhiteSpace(processedOrderId))
+        {
+            _logger.LogWarning(
+                "[Payme] PerformTransaction processed without poster order id. TransactionId={TransactionId} OrderId={OrderId}",
+                transactionId,
+                transaction.Id);
+        }
 
         transaction.Status = (int)TransactionState.Paid;
         transaction.PerformTime = currentTime;
@@ -167,11 +268,15 @@ public sealed class PaymeService
 
     public async Task<PaymeTransactionInfo> CancelTransactionAsync(PaymeCancelTransactionParams parameters, string? id, CancellationToken cancellationToken)
     {
+        var transactionId = parameters.Id ?? string.Empty;
         var transaction = await _dbContext.Transactions
-            .FirstOrDefaultAsync(x => x.TransactionId == parameters.Id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.TransactionId == transactionId, cancellationToken);
 
         if (transaction is null)
         {
+            _logger.LogWarning(
+                "[Payme] CancelTransaction failed: transaction not found. TransactionId={TransactionId}",
+                transactionId);
             throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
         }
 
@@ -207,7 +312,7 @@ public sealed class PaymeService
         return transactions.Select(transaction => new PaymeStatementItem(
             transaction.TransactionId ?? string.Empty,
             transaction.CreateTime,
-            ToPaymeAmount(transaction.Amount),
+            (long)transaction.Amount,
             transaction.Id,
             transaction.CreateTime,
             transaction.PerformTime,
@@ -219,7 +324,15 @@ public sealed class PaymeService
 
     public async Task<PaymeCheckoutResult> CreateCheckoutAsync(PaymeCheckoutRequest request, CancellationToken cancellationToken)
     {
-        var normalizedAmount = NormalizeAmount(request.Amount);
+        var hasServiceMode = TryGetServiceMode(request.OrderDetails, out var serviceMode);
+        _logger.LogInformation(
+            "[Payme] Checkout requested. UserId={UserId} Amount={Amount} CheckoutBaseUrl={CheckoutBaseUrl} ReturnUrl={ReturnUrl} ServiceMode={ServiceMode}",
+            request.UserId,
+            request.Amount,
+            _options.CheckoutBaseUrl,
+            request.Url,
+            hasServiceMode ? serviceMode : null);
+
         if (!string.IsNullOrWhiteSpace(request.UserId))
         {
             var pending = await _dbContext.Transactions
@@ -231,6 +344,12 @@ public sealed class PaymeService
 
             if (pending.Count > 0)
             {
+                var pendingIdsPreview = string.Join(",", pending.Select(x => x.Id).Take(5));
+                _logger.LogWarning(
+                    "[Payme] Removing {PendingCount} pending transactions for UserId={UserId}. SampleIds={SampleIds}",
+                    pending.Count,
+                    request.UserId,
+                    pendingIdsPreview);
                 _dbContext.Transactions.RemoveRange(pending);
                 await _dbContext.SaveChangesAsync(cancellationToken);
             }
@@ -244,7 +363,7 @@ public sealed class PaymeService
                 : "{}",
             Status = 0,
             Provider = "payme",
-            Amount = normalizedAmount,
+            Amount = request.Amount,
             UserId = request.UserId,
             CreatedAt = now,
             UpdatedAt = now,
@@ -253,27 +372,28 @@ public sealed class PaymeService
 
         await _dbContext.Transactions.AddAsync(orderDoc, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(_dbContext, orderDoc, request.OrderDetails, cancellationToken);
 
         var baseUrl = request.Url ?? string.Empty;
-        if (TryGetServiceMode(request.OrderDetails, out var serviceMode) && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))
+        if (hasServiceMode && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))
         {
             baseUrl = $"{baseUrl.TrimEnd('/')}/{orderDoc.Id}";
         }
 
-        var amountForPayme = ToPaymeAmount(normalizedAmount);
+        var amountForPayme = (long)(request.Amount * 100);
         var payload = $"m={_options.MerchantId};ac.order_id={orderDoc.Id};a={amountForPayme};c={baseUrl}";
         var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload));
 
         var checkoutUrl = $"{_options.CheckoutBaseUrl.TrimEnd('/')}/{encoded}";
+        _logger.LogInformation(
+            "[Payme] Checkout created. OrderId={OrderId} Amount={Amount} PayloadAmount={PayloadAmount} CheckoutBaseUrl={CheckoutBaseUrl}",
+            orderDoc.Id,
+            orderDoc.Amount,
+            amountForPayme,
+            _options.CheckoutBaseUrl);
         return new PaymeCheckoutResult(checkoutUrl, orderDoc.Id);
     }
 
-    private static decimal NormalizeAmount(decimal amount) =>
-        Math.Round(amount, 2, MidpointRounding.AwayFromZero);
-
-    private static long ToPaymeAmount(decimal amount) =>
-        (long)Math.Round(amount * 100m, 0, MidpointRounding.AwayFromZero);
+    private static decimal NormalizeAmount(long amount) => Math.Floor(amount / 100m);
 
     private static bool IsWithinExpiration(long createTime, long currentTime)
     {
