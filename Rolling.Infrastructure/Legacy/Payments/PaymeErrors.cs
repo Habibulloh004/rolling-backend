@@ -17,6 +17,11 @@ public static class PaymeErrors
         -31003,
         new("Tranzaktsiya topilmadi", "Транзакция не найдена", "Transaction not found"));
 
+    public static readonly PaymeErrorDescriptor OrderNotFound = new(
+        "OrderNotFound",
+        -31050,
+        new("Buyurtma topilmadi", "Заказ не найден", "Order not found"));
+
     public static readonly PaymeErrorDescriptor AlreadyDone = new(
         "AlreadyDone",
         -31060,

@@ -56,7 +56,7 @@ public sealed class PaymeService
                 "[Payme] CheckPerformTransaction failed: order not found. OrderId={OrderId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
                 orderId,
                 caseInsensitiveOrder?.Id);
-            throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
+            throw new PaymentTransactionException(PaymeErrors.OrderNotFound, id, "order_id");
         }
 
         if (order.Amount != amount)
@@ -154,7 +154,7 @@ public sealed class PaymeService
                 "[Payme] CreateTransaction failed: order not found. OrderId={OrderId} CaseInsensitiveMatchId={CaseInsensitiveMatchId}",
                 orderId,
                 caseInsensitiveOrder?.Id);
-            throw new PaymentTransactionException(PaymeErrors.TransactionNotFound, id);
+            throw new PaymentTransactionException(PaymeErrors.OrderNotFound, id, "order_id");
         }
 
         if (originalOrder.Status == (int)TransactionState.Paid)
