@@ -410,13 +410,15 @@ public sealed class PaymeService
         var performTime = isPerformed ? transaction.PerformTime : 0;
         var cancelTime = transaction.Status < 0 ? transaction.CancelTime : 0;
 
+        var reason = transaction.Status < 0 ? transaction.Reason : null;
+
         return new PaymeTransactionInfo(
             transaction.TransactionId ?? string.Empty,
             transaction.CreateTime,
             performTime,
             cancelTime,
             transaction.Status,
-            transaction.Reason);
+            reason);
     }
 
     public sealed record PaymeAccount([property: JsonPropertyName("order_id")] string OrderId);
