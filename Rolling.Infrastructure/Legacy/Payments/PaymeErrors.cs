@@ -14,7 +14,7 @@ public static class PaymeErrors
 
     public static readonly PaymeErrorDescriptor TransactionNotFound = new(
         "TransactionNotFound",
-        -31050,
+        -31003,
         new("Tranzaktsiya topilmadi", "Транзакция не найдена", "Transaction not found"));
 
     public static readonly PaymeErrorDescriptor AlreadyDone = new(

@@ -462,7 +462,7 @@ public sealed class PaymentsController : ControllerBase
             {
                 case PaymeMethod.CheckPerformTransaction:
                     await _paymeService.CheckPerformTransactionAsync(Deserialize<PaymeService.PaymeCheckPerformParams>(request.Params), idAsString, cancellationToken);
-                    return Ok(new { result = new { allow = true } });
+                    return Ok(new { result = new { allow = true }, id = rpcId });
 
                 case PaymeMethod.CheckTransaction:
                 {

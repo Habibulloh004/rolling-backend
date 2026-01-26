@@ -12,7 +12,7 @@ namespace Rolling.Infrastructure.Payments;
 
 public sealed class PaymeService
 {
-    private const int ExpirationMinutes = 12; // 12 hours minutes
+    private const int ExpirationMinutes = 720; // 12 hours = 720 minutes
 
     private readonly AppDbContext _dbContext;
     private readonly PaymeOptions _options;
@@ -404,9 +404,10 @@ public sealed class PaymeService
     private static PaymeTransactionInfo MapTransactionInfo(PaymentTransaction transaction)
     {
         // According to Payme spec:
-        // - perform_time should be 0 if transaction hasn't been performed (state < 2)
+        // - perform_time should be 0 if transaction hasn't been performed (pending or pending canceled)
         // - cancel_time should be 0 if transaction hasn't been cancelled (state > 0)
-        var performTime = transaction.Status >= (int)TransactionState.Paid ? transaction.PerformTime : 0;
+        var isPerformed = transaction.Status is (int)TransactionState.Paid or (int)TransactionState.PaidCanceled;
+        var performTime = isPerformed ? transaction.PerformTime : 0;
         var cancelTime = transaction.Status < 0 ? transaction.CancelTime : 0;
 
         return new PaymeTransactionInfo(
