@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.Configure<TelegramOptions>(configuration.GetSection(TelegramOptions.SectionName));
         services.Configure<PosterCacheRefreshOptions>(configuration.GetSection(PosterCacheRefreshOptions.SectionName));
         services.Configure<OrderPollingOptions>(configuration.GetSection(OrderPollingOptions.SectionName));
+        services.Configure<PaymentTrackingOptions>(configuration.GetSection(PaymentTrackingOptions.SectionName));
 
         services.AddSingleton<IConnectionMultiplexer>(provider =>
         {
@@ -125,6 +126,9 @@ public static class DependencyInjection
 
         // Active Order Tracker (singleton for tracking orders across requests)
         services.AddSingleton<Rolling.Infrastructure.Orders.ActiveOrderTracker>();
+
+        // Pending Payment Tracker (singleton for tracking pending payments across requests)
+        services.AddSingleton<PendingPaymentTracker>();
 
         return services;
     }

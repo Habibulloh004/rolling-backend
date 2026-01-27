@@ -111,6 +111,24 @@ public sealed class PushNotificationsController : ControllerBase
         return Ok(new { success = true, topic = $"all_users_{request.Language}", tokenValid = isValid });
     }
 
+    [HttpPost("tokens/validate")]
+    public async Task<IActionResult> ValidateTokenAsync([FromBody] TokenValidateRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.DeviceToken))
+        {
+            return BadRequest(new { error = "Device token is required" });
+        }
+
+        var result = await _notificationService.ValidateTokenDetailedAsync(request.DeviceToken, cancellationToken);
+        return Ok(new
+        {
+            success = true,
+            tokenValid = result.IsValid,
+            result.ErrorCode,
+            result.ErrorMessage
+        });
+    }
+
     [HttpPut("tokens/language")]
     public async Task<IActionResult> UpdateTokenLanguageAsync([FromBody] TokenLanguageUpdateRequest request, CancellationToken cancellationToken)
     {

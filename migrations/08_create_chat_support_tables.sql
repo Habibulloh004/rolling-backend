@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS chat_participants (
     display_name TEXT NOT NULL
 );
 
+-- Ensure legacy tables missing columns are patched before indexing.
+ALTER TABLE chat_participants
+    ADD COLUMN IF NOT EXISTS user_id UUID;
+
 CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_id_sent_at
     ON chat_messages(thread_id, sent_at);
 

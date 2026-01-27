@@ -33,6 +33,11 @@ public sealed class TokenLookupRequest
     public string Token { get; set; } = string.Empty;
 }
 
+public sealed class TokenValidateRequest
+{
+    public string DeviceToken { get; set; } = string.Empty;
+}
+
 public sealed class SendTopicRequest
 {
     public string MessageType { get; set; } = "body";

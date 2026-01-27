@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+-- Ensure legacy tables missing columns are patched before indexing.
+ALTER TABLE transactions
+    ADD COLUMN IF NOT EXISTS user_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS order_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS status INTEGER;
+
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);

@@ -95,6 +95,66 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+-- Ensure legacy tables missing columns are patched before indexing.
+ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS order_number VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS date TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS subtotal DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS delivery_fee DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS discount DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS total DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS status INTEGER,
+    ADD COLUMN IF NOT EXISTS delivery_address TEXT,
+    ADD COLUMN IF NOT EXISTS delivery_latitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS delivery_longitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS delivery_address_comment TEXT,
+    ADD COLUMN IF NOT EXISTS payment_method VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS payment_method_id VARCHAR(10),
+    ADD COLUMN IF NOT EXISTS payment_transaction_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS payment_error_code VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS payment_error_message TEXT,
+    ADD COLUMN IF NOT EXISTS payment_attempts INTEGER,
+    ADD COLUMN IF NOT EXISTS saved_card_token VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS estimated_delivery_time TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS actual_delivery_time TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS estimated_delivery_minutes_min INTEGER,
+    ADD COLUMN IF NOT EXISTS estimated_delivery_minutes_max INTEGER,
+    ADD COLUMN IF NOT EXISTS branch_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS branch_name VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS branch_address TEXT,
+    ADD COLUMN IF NOT EXISTS branch_phone VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS poster_spot_id VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS poster_incoming_order_id VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS poster_transaction_id VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS counted_towards_loyalty BOOLEAN,
+    ADD COLUMN IF NOT EXISTS loyalty_points_spent DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS loyalty_points_earned_pending DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS loyalty_points_earned_actual DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS receipt_url TEXT,
+    ADD COLUMN IF NOT EXISTS phone VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS first_name VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS last_name VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS comment TEXT,
+    ADD COLUMN IF NOT EXISTS courier_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS courier_name VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS courier_rating DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS courier_photo_url TEXT,
+    ADD COLUMN IF NOT EXISTS courier_vehicle VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS courier_license_plate VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS courier_phone VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS courier_latitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS courier_longitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS courier_location_last_updated TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS service_mode INTEGER,
+    ADD COLUMN IF NOT EXISTS promo_code VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS promo_discount_amount DECIMAL(18, 2),
+    ADD COLUMN IF NOT EXISTS promo_discount_percentage DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS user_id VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS user_order_count INTEGER,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;
+
 -- Indexes for orders table
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -107,7 +167,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(date DESC);
 -- Order items table (matching iOS OrderItem model)
 CREATE TABLE IF NOT EXISTS order_items (
     id VARCHAR(255) PRIMARY KEY,
-    order_id VARCHAR(255) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id VARCHAR(255) NOT NULL,
     menu_item_id VARCHAR(255) NOT NULL DEFAULT '',
     name VARCHAR(255) NOT NULL DEFAULT '',
     quantity INTEGER NOT NULL DEFAULT 1,
@@ -126,7 +186,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_menu_item_id ON order_items(menu_item
 -- Order timeline events table (matching iOS TimelineEvent model)
 CREATE TABLE IF NOT EXISTS order_timeline_events (
     id VARCHAR(255) PRIMARY KEY,
-    order_id VARCHAR(255) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id VARCHAR(255) NOT NULL,
     title VARCHAR(255) NOT NULL DEFAULT '',
     time TIMESTAMP WITH TIME ZONE,
     is_completed BOOLEAN NOT NULL DEFAULT FALSE,
@@ -136,6 +196,64 @@ CREATE TABLE IF NOT EXISTS order_timeline_events (
 
 CREATE INDEX IF NOT EXISTS idx_order_timeline_events_order_id ON order_timeline_events(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_timeline_events_sort_order ON order_timeline_events(order_id, sort_order);
+
+-- Add foreign keys only when types are compatible and constraints are missing.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'orders'
+          AND column_name = 'id'
+          AND data_type = 'character varying'
+    )
+    AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'order_items'
+          AND column_name = 'order_id'
+          AND data_type = 'character varying'
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'order_items_order_id_fkey'
+    )
+    THEN
+        ALTER TABLE order_items
+            ADD CONSTRAINT order_items_order_id_fkey
+            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'orders'
+          AND column_name = 'id'
+          AND data_type = 'character varying'
+    )
+    AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'order_timeline_events'
+          AND column_name = 'order_id'
+          AND data_type = 'character varying'
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'order_timeline_events_order_id_fkey'
+    )
+    THEN
+        ALTER TABLE order_timeline_events
+            ADD CONSTRAINT order_timeline_events_order_id_fkey
+            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
 -- Comments
 COMMENT ON TABLE orders IS 'Customer orders from iOS app (matching iOS Order model)';

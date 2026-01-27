@@ -15,6 +15,7 @@ public sealed class ClickService
     private readonly AppDbContext _dbContext;
     private readonly ClickOptions _options;
     private readonly OrderProcessor _orderProcessor;
+    private readonly PendingPaymentTracker _pendingPaymentTracker;
     private readonly ClickSignatureValidator _signatureValidator;
     private readonly ILogger<ClickService> _logger;
 
@@ -22,11 +23,13 @@ public sealed class ClickService
         AppDbContext dbContext,
         IOptions<ClickOptions> options,
         OrderProcessor orderProcessor,
+        PendingPaymentTracker pendingPaymentTracker,
         ILogger<ClickService> logger)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _orderProcessor = orderProcessor;
+        _pendingPaymentTracker = pendingPaymentTracker;
         _signatureValidator = new ClickSignatureValidator(_options);
         _logger = logger;
     }
@@ -87,6 +90,7 @@ public sealed class ClickService
         order.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        UpdatePendingTracking(order);
 
         return ClickPrepareResponse.Success(request.ClickTransId, request.MerchantTransId, currentTime.ToString());
     }
@@ -156,6 +160,7 @@ public sealed class ClickService
             order.CancelTime = currentTime;
             order.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            _pendingPaymentTracker.UntrackPayment(order.Id);
 
             return ClickCompleteResponse.Failure(ClickErrorCodes.TransactionNotFound, "Transaction not found");
         }
@@ -168,6 +173,7 @@ public sealed class ClickService
         order.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        _pendingPaymentTracker.UntrackPayment(order.Id);
 
         return ClickCompleteResponse.Success(request.ClickTransId, request.MerchantTransId, currentTime.ToString());
     }
@@ -191,6 +197,21 @@ public sealed class ClickService
         !string.IsNullOrWhiteSpace(request.AmountRaw)
             ? request.AmountRaw
             : request.Amount.ToString(CultureInfo.InvariantCulture);
+
+    private void UpdatePendingTracking(PaymentTransaction transaction)
+    {
+        if (IsPendingStatus(transaction.Status))
+        {
+            _pendingPaymentTracker.TrackPayment(transaction);
+        }
+        else
+        {
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
+        }
+    }
+
+    private static bool IsPendingStatus(int status) =>
+        status >= 0 && status < (int)TransactionState.Paid;
 
     public async Task<ClickCheckoutResult> CheckoutAsync(ClickCheckoutRequest request, CancellationToken cancellationToken)
     {
@@ -225,6 +246,7 @@ public sealed class ClickService
         if (existing is not null)
         {
             var existingCheckoutUrl = BuildCheckoutUrl(existing.Id, request.Amount, request.Url, request.OrderDetails);
+            UpdatePendingTracking(existing);
             return new ClickCheckoutResult(existingCheckoutUrl, existing.Id);
         }
 
@@ -243,6 +265,7 @@ public sealed class ClickService
         await _dbContext.Transactions.AddAsync(orderDoc, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(_dbContext, orderDoc, request.OrderDetails, cancellationToken);
+        UpdatePendingTracking(orderDoc);
 
         var checkoutUrl = BuildCheckoutUrl(orderDoc.Id, request.Amount, request.Url, request.OrderDetails);
 

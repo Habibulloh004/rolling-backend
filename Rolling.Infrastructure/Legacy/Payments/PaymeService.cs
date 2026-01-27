@@ -17,17 +17,20 @@ public sealed class PaymeService
     private readonly AppDbContext _dbContext;
     private readonly PaymeOptions _options;
     private readonly OrderProcessor _orderProcessor;
+    private readonly PendingPaymentTracker _pendingPaymentTracker;
     private readonly ILogger<PaymeService> _logger;
 
     public PaymeService(
         AppDbContext dbContext,
         IOptions<PaymeOptions> options,
         OrderProcessor orderProcessor,
+        PendingPaymentTracker pendingPaymentTracker,
         ILogger<PaymeService> logger)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _orderProcessor = orderProcessor;
+        _pendingPaymentTracker = pendingPaymentTracker;
         _logger = logger;
     }
 
@@ -117,6 +120,7 @@ public sealed class PaymeService
                     "[Payme] CreateTransaction rejected: existing transaction not pending. TransactionId={TransactionId} Status={Status}",
                     transactionId,
                     existingTransaction.Status);
+                _pendingPaymentTracker.UntrackPayment(existingTransaction.Id);
                 throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
             }
 
@@ -131,9 +135,11 @@ public sealed class PaymeService
                 existingTransaction.Reason = 4;
                 existingTransaction.UpdatedAt = DateTime.UtcNow;
                 await _dbContext.SaveChangesAsync(cancellationToken);
+                UpdatePendingTracking(existingTransaction);
                 throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
             }
 
+            UpdatePendingTracking(existingTransaction);
             return MapTransactionInfo(existingTransaction);
         }
 
@@ -181,6 +187,7 @@ public sealed class PaymeService
         originalOrder.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        UpdatePendingTracking(originalOrder);
 
         _logger.LogInformation(
             "[Payme] CreateTransaction linked order. OrderId={OrderId} TransactionId={TransactionId} CreateTime={CreateTime}",
@@ -222,12 +229,14 @@ public sealed class PaymeService
                     "[Payme] PerformTransaction rejected: invalid state. TransactionId={TransactionId} Status={Status}",
                     transactionId,
                     transaction.Status);
+                _pendingPaymentTracker.UntrackPayment(transaction.Id);
                 throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
             }
 
             _logger.LogInformation(
                 "[Payme] PerformTransaction skipped: already paid. TransactionId={TransactionId}",
                 transactionId);
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
             return MapTransactionInfo(transaction);
         }
 
@@ -244,6 +253,7 @@ public sealed class PaymeService
             transaction.CancelTime = currentTime;
             transaction.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
             throw new PaymentTransactionException(PaymeErrors.CantDoOperation, id);
         }
 
@@ -262,6 +272,7 @@ public sealed class PaymeService
         transaction.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        _pendingPaymentTracker.UntrackPayment(transaction.Id);
 
         return MapTransactionInfo(transaction);
     }
@@ -288,6 +299,11 @@ public sealed class PaymeService
             transaction.CancelTime = currentTime;
             transaction.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
+        }
+        else
+        {
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
         }
 
         return new PaymeTransactionInfo(
@@ -352,6 +368,10 @@ public sealed class PaymeService
                     pendingIdsPreview);
                 _dbContext.Transactions.RemoveRange(pending);
                 await _dbContext.SaveChangesAsync(cancellationToken);
+                foreach (var transaction in pending)
+                {
+                    _pendingPaymentTracker.UntrackPayment(transaction.Id);
+                }
             }
         }
 
@@ -372,6 +392,7 @@ public sealed class PaymeService
 
         await _dbContext.Transactions.AddAsync(orderDoc, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        _pendingPaymentTracker.TrackPayment(orderDoc);
 
         var baseUrl = request.Url ?? string.Empty;
         if (hasServiceMode && serviceMode != 1 && !string.IsNullOrWhiteSpace(baseUrl))
@@ -400,6 +421,21 @@ public sealed class PaymeService
         var elapsedMinutes = (currentTime - createTime) / 60000m;
         return elapsedMinutes < ExpirationMinutes;
     }
+
+    private void UpdatePendingTracking(PaymentTransaction transaction)
+    {
+        if (IsPendingStatus(transaction.Status))
+        {
+            _pendingPaymentTracker.TrackPayment(transaction);
+        }
+        else
+        {
+            _pendingPaymentTracker.UntrackPayment(transaction.Id);
+        }
+    }
+
+    private static bool IsPendingStatus(int status) =>
+        status >= 0 && status < (int)TransactionState.Paid;
 
     private static PaymeTransactionInfo MapTransactionInfo(PaymentTransaction transaction)
     {

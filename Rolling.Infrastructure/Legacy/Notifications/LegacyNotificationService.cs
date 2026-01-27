@@ -69,6 +69,8 @@ public sealed class NotificationService
 
     public IReadOnlyDictionary<string, NotificationTemplate> GetMessages() => _messages;
 
+    public sealed record TokenValidationResult(bool IsValid, string? ErrorCode, string? ErrorMessage);
+
     public async Task<bool> ValidateTokenAsync(string deviceToken, CancellationToken cancellationToken)
     {
         var tokenPreview = deviceToken.Length > 20
@@ -113,6 +115,54 @@ public sealed class NotificationService
         {
             _logger.LogWarning(ex, "Token validation failed: Token={TokenPreview}", tokenPreview);
             return false;
+        }
+    }
+
+    public async Task<TokenValidationResult> ValidateTokenDetailedAsync(string deviceToken, CancellationToken cancellationToken)
+    {
+        var tokenPreview = deviceToken.Length > 20
+            ? $"{deviceToken[..10]}...{deviceToken[^10..]}"
+            : deviceToken;
+
+        _logger.LogDebug("ValidateTokenDetailedAsync called: Token={TokenPreview}", tokenPreview);
+
+        var messaging = _messagingAccessor.Messaging;
+        if (messaging is null)
+        {
+            _logger.LogWarning(
+                "Firebase Messaging is not configured. Token validation skipped: Token={TokenPreview}",
+                tokenPreview);
+            return new TokenValidationResult(false, "messaging_not_configured", "Firebase Messaging is not configured.");
+        }
+
+        try
+        {
+            var message = new Message
+            {
+                Token = deviceToken,
+                Notification = new Notification
+                {
+                    Title = "Test",
+                    Body = "Test"
+                }
+            };
+
+            await messaging.SendAsync(message, dryRun: true, cancellationToken);
+            _logger.LogDebug("Token validation succeeded: Token={TokenPreview}", tokenPreview);
+            return new TokenValidationResult(true, null, null);
+        }
+        catch (FirebaseMessagingException ex)
+        {
+            _logger.LogWarning(
+                "Token validation failed: Token={TokenPreview}, ErrorCode={ErrorCode}, Message={Message}",
+                tokenPreview, ex.MessagingErrorCode, ex.Message);
+            var errorCode = ex.MessagingErrorCode?.ToString() ?? "firebase_error";
+            return new TokenValidationResult(false, errorCode, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Token validation failed: Token={TokenPreview}", tokenPreview);
+            return new TokenValidationResult(false, "error", ex.Message);
         }
     }
 
