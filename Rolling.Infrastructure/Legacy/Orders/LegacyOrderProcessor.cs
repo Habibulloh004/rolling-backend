@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Rolling.Infrastructure.Messaging;
+using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Poster;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
@@ -11,17 +12,23 @@ public sealed class OrderProcessor
 {
     private readonly PosterService _posterService;
     private readonly TelegramService _telegramService;
+    private readonly ActiveOrderTracker _orderTracker;
+    private readonly NotificationTokenStore _tokenStore;
     private readonly AppDbContext _dbContext;
     private readonly ILogger<OrderProcessor> _logger;
 
     public OrderProcessor(
         PosterService posterService,
         TelegramService telegramService,
+        ActiveOrderTracker orderTracker,
+        NotificationTokenStore tokenStore,
         AppDbContext dbContext,
         ILogger<OrderProcessor> logger)
     {
         _posterService = posterService;
         _telegramService = telegramService;
+        _orderTracker = orderTracker;
+        _tokenStore = tokenStore;
         _dbContext = dbContext;
         _logger = logger;
     }
@@ -52,13 +59,18 @@ public sealed class OrderProcessor
             return null;
         }
 
-        await PaymentOrderBuilder.EnsurePaidOrderAsync(
+        var ensuredOrder = await PaymentOrderBuilder.EnsurePaidOrderAsync(
             _dbContext,
             order,
             orderDetails.RootElement,
             result.TransactionId,
             result.IncomingOrderId,
             cancellationToken);
+
+        if (ensuredOrder is not null)
+        {
+            TrackOrderForPolling(ensuredOrder);
+        }
 
         return result.TransactionId ?? result.IncomingOrderId;
     }
@@ -157,4 +169,40 @@ public sealed class OrderProcessor
     }
 
     private sealed record PosterOrderResult(string? TransactionId, string? IncomingOrderId);
+
+    private void TrackOrderForPolling(Order order)
+    {
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled)
+        {
+            return;
+        }
+
+        var fcmToken = order.FcmToken;
+        var language = ResolveLanguage(fcmToken);
+
+        _orderTracker.TrackOrder(new TrackedOrder
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            PosterIncomingOrderId = order.PosterIncomingOrderId,
+            PosterTransactionId = order.PosterTransactionId,
+            FcmToken = fcmToken,
+            Phone = order.Phone,
+            CurrentStatus = order.Status,
+            Language = language
+        });
+    }
+
+    private string ResolveLanguage(string? token)
+    {
+        if (!string.IsNullOrWhiteSpace(token) &&
+            _tokenStore.TryGet(token, out var entry) &&
+            !string.IsNullOrWhiteSpace(entry.Language) &&
+            NotificationService.IsLanguageSupported(entry.Language))
+        {
+            return entry.Language!.Trim().ToLowerInvariant();
+        }
+
+        return "en";
+    }
 }
