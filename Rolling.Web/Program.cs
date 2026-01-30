@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Rolling.Application;
 using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure;
+using Rolling.Infrastructure.Seeding;
 using Rolling.Infrastructure.Services;
 using Rolling.Web.Diagnostics;
 using Rolling.Web.Middleware;
@@ -51,6 +52,7 @@ builder.Services.AddHostedService<NotificationCleanupService>();
 builder.Services.AddHostedService<PosterCacheRefreshService>();
 builder.Services.AddHostedService<OrderStatusPollingService>();
 builder.Services.AddHostedService<PaymentExpirationService>();
+builder.Services.AddHostedService<RedisWarmupService>();
 builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
 builder.Services.AddSingleton<IWebhookMessageStore, InMemoryWebhookMessageStore>();
@@ -82,6 +84,9 @@ app.Services.EnsureInfrastructure();
 
 // Run database migrations automatically
 await RunDatabaseMigrationsAsync(app);
+
+// Seed branch configurations from Poster API if database is empty
+await SeedBranchConfigurationsAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -173,6 +178,21 @@ static async Task RunDatabaseMigrationsAsync(WebApplication app)
     {
         app.Logger.LogError(ex, "Failed to run database migrations");
         throw;
+    }
+}
+
+static async Task SeedBranchConfigurationsAsync(WebApplication app)
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var seeder = scope.ServiceProvider.GetRequiredService<BranchConfigurationSeeder>();
+        await seeder.SeedIfEmptyAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Failed to seed branch configurations");
+        // Don't throw - seeding failure shouldn't prevent app startup
     }
 }
 

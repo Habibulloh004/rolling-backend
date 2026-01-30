@@ -40,6 +40,7 @@ internal static class PaymentOrderBuilder
         {
             var order = BuildOrder(transaction, orderDetails, OrderStatus.Pending, posterTransactionId, posterIncomingOrderId);
             await dbContext.Orders.AddAsync(order, cancellationToken);
+            existing = order;
         }
         else
         {

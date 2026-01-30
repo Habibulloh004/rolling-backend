@@ -98,14 +98,23 @@ public sealed class OrderStatusPollingService : BackgroundService
         var cutoff = now.AddDays(-lookbackDays);
 
         var trackedOrders = _orderTracker.GetTrackedOrders();
-        if (trackedOrders.Count == 0)
+        var initialTrackedCount = trackedOrders.Count;
+        if (initialTrackedCount == 0)
         {
+            _logger.LogDebug("Polling cycle skipped - no tracked orders");
             return;
         }
 
+        _logger.LogInformation(
+            "Polling cycle start: Tracked={TrackedCount}, LookbackDays={LookbackDays}",
+            initialTrackedCount,
+            lookbackDays);
+
         trackedOrders = await SyncTrackedOrdersFromDbAsync(dbContext, trackedOrders, cancellationToken);
-        if (trackedOrders.Count == 0)
+        var syncedTrackedCount = trackedOrders.Count;
+        if (syncedTrackedCount == 0)
         {
+            _logger.LogInformation("Polling cycle ended - no tracked orders after DB sync");
             return;
         }
 
@@ -114,14 +123,18 @@ public sealed class OrderStatusPollingService : BackgroundService
                 !string.IsNullOrWhiteSpace(order.PosterIncomingOrderId))
             .ToList();
 
-        if (ordersWithPosterIds.Count == 0)
+        var withPosterIdsCount = ordersWithPosterIds.Count;
+        if (withPosterIdsCount == 0)
         {
+            _logger.LogWarning(
+                "Polling cycle ended - tracked orders missing Poster IDs: TrackedAfterSync={TrackedCount}",
+                syncedTrackedCount);
             return;
         }
 
         _logger.LogDebug(
             "Polling Poster statuses for {OrderCount} tracked orders (lookback {LookbackDays}d)",
-            ordersWithPosterIds.Count,
+            withPosterIdsCount,
             lookbackDays);
 
         var dateFrom = cutoff.ToString("yyyy-MM-dd");
@@ -158,6 +171,24 @@ public sealed class OrderStatusPollingService : BackgroundService
             }
 
             _logger.LogDebug("Poster transactions fetched: {TransactionCount}", transactionCount);
+            if (transactionCount == 0)
+            {
+                _logger.LogWarning(
+                    "Poster transactions response empty for range {DateFrom}..{DateTo}",
+                    dateFrom,
+                    dateTo);
+            }
+
+            var resolvedStatusCount = 0;
+            var updatedDbCount = 0;
+            var notifiedCount = 0;
+            var skippedNoPosterStatus = 0;
+            var skippedNoUpdate = 0;
+            var skippedNoFcm = 0;
+            var fallbackIncomingResolutionCount = 0;
+            var fallbackSingleFetchCount = 0;
+            var fallbackStatusFoundCount = 0;
+            var errorCount = 0;
 
             foreach (var order in ordersWithPosterIds)
             {
@@ -170,11 +201,44 @@ public sealed class OrderStatusPollingService : BackgroundService
                         incomingOrderStatuses);
                     if (posterStatus == null)
                     {
+                        var fallback = await ResolvePosterStatusFallbackAsync(
+                            posterService,
+                            dbContext,
+                            order,
+                            transactionStatuses,
+                            cancellationToken);
+
+                        if (fallback.UsedIncomingResolution)
+                        {
+                            fallbackIncomingResolutionCount++;
+                        }
+
+                        if (fallback.UsedSingleFetch)
+                        {
+                            fallbackSingleFetchCount++;
+                        }
+
+                        posterStatus = fallback.Status;
+                        if (posterStatus == null)
+                        {
+                            skippedNoPosterStatus++;
+                            continue;
+                        }
+
+                        fallbackStatusFoundCount++;
+                    }
+
+                    if (posterStatus == null)
+                    {
+                        skippedNoPosterStatus++;
                         continue;
                     }
 
+                    resolvedStatusCount++;
+
                     if (!ShouldUpdateStatus(order.CurrentStatus, posterStatus.Value))
                     {
+                        skippedNoUpdate++;
                         continue;
                     }
 
@@ -186,9 +250,11 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     if (!dbUpdated)
                     {
+                        skippedNoUpdate++;
                         continue;
                     }
 
+                    updatedDbCount++;
                     UpdateTrackedOrderStatus(order.OrderId, posterStatus.Value);
 
                     if (!ShouldNotifyStatus(posterStatus.Value))
@@ -198,6 +264,7 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     if (string.IsNullOrWhiteSpace(order.FcmToken))
                     {
+                        skippedNoFcm++;
                         _logger.LogWarning(
                             "Order has no FCM token, push notification skipped: OrderId={OrderId}, OrderNumber={OrderNumber}, Status={Status}",
                             order.OrderId,
@@ -212,13 +279,156 @@ public sealed class OrderStatusPollingService : BackgroundService
                         order.CurrentStatus,
                         posterStatus.Value,
                         cancellationToken);
+                    notifiedCount++;
                 }
                 catch (Exception ex)
                 {
+                    errorCount++;
                     _logger.LogError(ex, "Error polling status for order {OrderId}", order.OrderId);
                 }
             }
+
+            _logger.LogInformation(
+                "Polling cycle summary: Tracked={TrackedCount}, Synced={SyncedCount}, WithPosterIds={WithPosterIdsCount}, " +
+                "PosterTransactions={TransactionCount}, StatusLookupTx={TxStatusCount}, StatusLookupIncoming={IncomingStatusCount}, " +
+                "PosterStatuses={ResolvedCount}, DbUpdated={UpdatedCount}, Notified={NotifiedCount}, " +
+                "FallbackIncomingResolution={FallbackIncomingResolution}, FallbackSingleFetch={FallbackSingleFetch}, FallbackStatusFound={FallbackStatusFound}, " +
+                "SkippedNoPosterStatus={SkippedNoPosterStatus}, SkippedNoUpdate={SkippedNoUpdate}, SkippedNoFcm={SkippedNoFcm}, Errors={ErrorCount}",
+                initialTrackedCount,
+                syncedTrackedCount,
+                withPosterIdsCount,
+                transactionCount,
+                transactionStatuses.Count,
+                incomingOrderStatuses.Count,
+                resolvedStatusCount,
+                updatedDbCount,
+                notifiedCount,
+                fallbackIncomingResolutionCount,
+                fallbackSingleFetchCount,
+                fallbackStatusFoundCount,
+                skippedNoPosterStatus,
+                skippedNoUpdate,
+                skippedNoFcm,
+                errorCount);
         }
+    }
+
+    private async Task<(OrderStatus? Status, bool UsedIncomingResolution, bool UsedSingleFetch)> ResolvePosterStatusFallbackAsync(
+        PosterService posterService,
+        AppDbContext dbContext,
+        TrackedOrder order,
+        IReadOnlyDictionary<string, OrderStatus> transactionStatuses,
+        CancellationToken cancellationToken)
+    {
+        var usedIncomingResolution = false;
+        var usedSingleFetch = false;
+
+        var normalizedTransactionId = NormalizePosterIdentifier(order.PosterTransactionId);
+        var normalizedIncomingOrderId = NormalizePosterIdentifier(order.PosterIncomingOrderId);
+
+        if (string.IsNullOrWhiteSpace(normalizedTransactionId) &&
+            !string.IsNullOrWhiteSpace(normalizedIncomingOrderId))
+        {
+            usedIncomingResolution = true;
+            var resolution = await ResolveIncomingOrderAsync(
+                posterService,
+                normalizedIncomingOrderId,
+                cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(resolution.TransactionId))
+            {
+                normalizedTransactionId = NormalizePosterIdentifier(resolution.TransactionId);
+                if (!string.IsNullOrWhiteSpace(normalizedTransactionId))
+                {
+                    await UpdatePosterTransactionIdAsync(
+                        dbContext,
+                        order.OrderId,
+                        normalizedTransactionId,
+                        cancellationToken);
+
+                    _orderTracker.TrackOrder(order with
+                    {
+                        PosterTransactionId = normalizedTransactionId
+                    });
+
+                    if (transactionStatuses.TryGetValue(normalizedTransactionId, out var statusFromBatch))
+                    {
+                        _logger.LogDebug(
+                            "Resolved incoming order {IncomingOrderId} -> transaction {TransactionId} (status from batch)",
+                            normalizedIncomingOrderId,
+                            normalizedTransactionId);
+                        return (statusFromBatch, usedIncomingResolution, usedSingleFetch);
+                    }
+                }
+            }
+
+            if (resolution.Status != null)
+            {
+                _logger.LogDebug(
+                    "Resolved incoming order {IncomingOrderId} -> status {Status}",
+                    normalizedIncomingOrderId,
+                    resolution.Status.Value);
+                return (resolution.Status, usedIncomingResolution, usedSingleFetch);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedTransactionId))
+        {
+            usedSingleFetch = true;
+            var status = await GetTransactionStatusAsync(
+                posterService,
+                normalizedTransactionId,
+                cancellationToken);
+
+            if (status != null)
+            {
+                _logger.LogDebug(
+                    "Fetched transaction {TransactionId} status via single call -> {Status}",
+                    normalizedTransactionId,
+                    status.Value);
+            }
+
+            return (status, usedIncomingResolution, usedSingleFetch);
+        }
+
+        return (null, usedIncomingResolution, usedSingleFetch);
+    }
+
+    private async Task<bool> UpdatePosterTransactionIdAsync(
+        AppDbContext dbContext,
+        string orderId,
+        string posterTransactionId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(posterTransactionId))
+        {
+            return false;
+        }
+
+        var order = await dbContext.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+        if (order == null)
+        {
+            _logger.LogWarning(
+                "Poster transaction id update skipped - order not found: OrderId={OrderId}",
+                orderId);
+            return false;
+        }
+
+        if (string.Equals(order.PosterTransactionId, posterTransactionId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        order.PosterTransactionId = posterTransactionId;
+        order.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Updated order PosterTransactionId from incoming order: OrderId={OrderId}, PosterTransactionId={PosterTransactionId}",
+            orderId,
+            posterTransactionId);
+
+        return true;
     }
 
     private static OrderStatus? ResolvePosterStatus(
@@ -1574,11 +1784,18 @@ public sealed class OrderStatusPollingService : BackgroundService
         var order = await dbContext.Orders.FindAsync(new object[] { orderId }, cancellationToken);
         if (order == null)
         {
+            _logger.LogWarning(
+                "Polling update skipped - order not found in DB: OrderId={OrderId}",
+                orderId);
             return false;
         }
 
         if (order.Status == newStatus)
         {
+            _logger.LogDebug(
+                "Polling update skipped - status unchanged: OrderId={OrderId}, Status={Status}",
+                orderId,
+                newStatus);
             return false;
         }
 
@@ -1595,6 +1812,10 @@ public sealed class OrderStatusPollingService : BackgroundService
         order.Status = newStatus;
         order.UpdatedAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Order status updated via polling: OrderId={OrderId}, Status={Status}",
+            orderId,
+            newStatus);
         return true;
     }
 

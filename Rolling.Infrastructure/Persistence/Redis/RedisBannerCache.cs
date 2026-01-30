@@ -209,7 +209,10 @@ public sealed class RedisBannerCache : IRedisBannerCache
         string Lang,
         string? Path,
         DateTime CreatedAt,
-        bool IsActive)
+        bool IsActive,
+        string ImageUrls,
+        string Deeplinks,
+        string Platforms)
     {
         public static BannerDocument FromEntity(Banner banner) => new(
             banner.Id,
@@ -220,7 +223,10 @@ public sealed class RedisBannerCache : IRedisBannerCache
             banner.Lang,
             banner.Path,
             banner.CreatedAt,
-            banner.IsActive
+            banner.IsActive,
+            banner.ImageUrls,
+            banner.Deeplinks,
+            banner.Platforms
         );
 
         public Banner ToEntity() => new()
@@ -233,7 +239,10 @@ public sealed class RedisBannerCache : IRedisBannerCache
             Lang = Lang,
             Path = Path,
             CreatedAt = CreatedAt,
-            IsActive = IsActive
+            IsActive = IsActive,
+            ImageUrls = ImageUrls ?? "{}",
+            Deeplinks = Deeplinks ?? "{}",
+            Platforms = Platforms ?? "{}"
         };
     }
 }

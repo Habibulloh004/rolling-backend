@@ -4,6 +4,9 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project Rolling.Web/Rolling.Web.
 
 ASPNETCORE_ENVIRONMENT=Development dotnet watch --project rolling-back/Rolling.Web/Rolling.Web.csproj
 
+
+open "/Users/habibulloh1209mail.ru/Desktop/pr/rolling-combine/rolling-ios/White Lebel.xcodeproj"
+
 some changes
 
 

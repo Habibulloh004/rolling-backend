@@ -35,43 +35,112 @@ public sealed class BannersController : ControllerBase
 
     /// <summary>
     /// Get all active banners, sorted by creation date (newest first)
+    /// Supports filtering by language, search text, and date range
     /// </summary>
+    /// <param name="lang">Filter by language code (en, ru, uz)</param>
+    /// <param name="platform">Platform type for URL resolution: "mobile" (default) or "web"</param>
+    /// <param name="search">Search text in title, subtitle, description</param>
+    /// <param name="dateFrom">Filter by creation date from</param>
+    /// <param name="dateTo">Filter by creation date to</param>
+    /// <param name="take">Number of items to return (max 500)</param>
+    /// <param name="skip">Number of items to skip</param>
+    /// <param name="resolve">If true, resolves imageUrl and path to language/platform-specific values</param>
     [HttpGet]
-    public async Task<IActionResult> GetBannersAsync([FromQuery] string? lang = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetBannersAsync(
+        [FromQuery] string? lang = null,
+        [FromQuery] string? platform = "mobile",
+        [FromQuery] string? search = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] int take = 100,
+        [FromQuery] int skip = 0,
+        [FromQuery] bool resolve = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            // Try to get from Redis cache first
-            var cachedBanners = await _cache.GetBannersAsync(lang, cancellationToken);
-            if (cachedBanners != null)
+            var effectivePlatform = string.IsNullOrWhiteSpace(platform) ? "mobile" : platform;
+
+            // Skip cache if using search or date filters for accurate results
+            var hasFilters = !string.IsNullOrWhiteSpace(search) || dateFrom.HasValue || dateTo.HasValue || skip > 0;
+
+            if (!hasFilters)
             {
-                var cachedResponse = new BannersListResponse
+                // Try to get from Redis cache first (only for simple lang queries)
+                var cachedBanners = await _cache.GetBannersAsync(lang, cancellationToken);
+                if (cachedBanners != null)
                 {
-                    Banners = cachedBanners.Select(BannerResponse.FromEntity).ToList()
-                };
-                return Ok(cachedResponse);
+                    var size = Math.Clamp(take, 1, 500);
+                    var cachedList = cachedBanners.ToList();
+                    var cachedResponse = new BannersListResponse
+                    {
+                        Banners = cachedList.Take(size).Select(b =>
+                            resolve && !string.IsNullOrWhiteSpace(lang)
+                                ? BannerResponse.FromEntityForClient(b, lang, effectivePlatform)
+                                : BannerResponse.FromEntity(b)).ToList(),
+                        TotalCount = cachedList.Count
+                    };
+                    return Ok(cachedResponse);
+                }
             }
 
-            // Cache miss - fetch from database
+            // Cache miss or using filters - fetch from database
             var query = _dbContext.Banners
                 .AsNoTracking()
                 .Where(b => b.IsActive);
 
+            // Apply language filter
             if (!string.IsNullOrWhiteSpace(lang))
             {
                 query = query.Where(b => b.Lang == lang);
             }
 
+            // Apply search filter (Title, Subtitle, Description)
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var searchLower = search.Trim().ToLower();
+                query = query.Where(b =>
+                    b.Title.ToLower().Contains(searchLower) ||
+                    (b.Subtitle != null && b.Subtitle.ToLower().Contains(searchLower)) ||
+                    b.Description.ToLower().Contains(searchLower));
+            }
+
+            // Apply date range filter
+            if (dateFrom.HasValue)
+            {
+                var fromUtc = DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc);
+                query = query.Where(b => b.CreatedAt >= fromUtc);
+            }
+
+            if (dateTo.HasValue)
+            {
+                var toUtc = DateTime.SpecifyKind(dateTo.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+                query = query.Where(b => b.CreatedAt <= toUtc);
+            }
+
+            // Get total count for pagination
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var size2 = Math.Clamp(take, 1, 500);
             var banners = await query
                 .OrderByDescending(b => b.CreatedAt)
+                .Skip(skip)
+                .Take(size2)
                 .ToListAsync(cancellationToken);
 
-            // Cache the result in Redis
-            await _cache.SetBannersAsync(banners, lang, cancellationToken);
+            // Only cache if no filters applied (simple queries)
+            if (!hasFilters)
+            {
+                await _cache.SetBannersAsync(banners, lang, cancellationToken);
+            }
 
             var response = new BannersListResponse
             {
-                Banners = banners.Select(BannerResponse.FromEntity).ToList()
+                Banners = banners.Select(b =>
+                    resolve && !string.IsNullOrWhiteSpace(lang)
+                        ? BannerResponse.FromEntityForClient(b, lang, effectivePlatform)
+                        : BannerResponse.FromEntity(b)).ToList(),
+                TotalCount = totalCount
             };
 
             return Ok(response);
@@ -86,16 +155,30 @@ public sealed class BannersController : ControllerBase
     /// <summary>
     /// Get a specific banner by ID
     /// </summary>
+    /// <param name="id">Banner ID</param>
+    /// <param name="lang">Language code for URL resolution (en, ru, uz)</param>
+    /// <param name="platform">Platform type for URL resolution: "mobile" (default) or "web"</param>
+    /// <param name="resolve">If true, resolves imageUrl and path to language/platform-specific values</param>
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetBannerAsync(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetBannerAsync(
+        int id,
+        [FromQuery] string? lang = null,
+        [FromQuery] string? platform = "mobile",
+        [FromQuery] bool resolve = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
+            var effectivePlatform = string.IsNullOrWhiteSpace(platform) ? "mobile" : platform;
+
             // Try to get from Redis cache first
             var cachedBanner = await _cache.GetBannerByIdAsync(id, cancellationToken);
             if (cachedBanner != null)
             {
-                return Ok(BannerResponse.FromEntity(cachedBanner));
+                var response = resolve && !string.IsNullOrWhiteSpace(lang)
+                    ? BannerResponse.FromEntityForClient(cachedBanner, lang, effectivePlatform)
+                    : BannerResponse.FromEntity(cachedBanner);
+                return Ok(response);
             }
 
             // Cache miss - fetch from database
@@ -111,7 +194,10 @@ public sealed class BannersController : ControllerBase
             // Cache the result in Redis
             await _cache.SetBannerAsync(banner, cancellationToken);
 
-            return Ok(BannerResponse.FromEntity(banner));
+            var bannerResponse = resolve && !string.IsNullOrWhiteSpace(lang)
+                ? BannerResponse.FromEntityForClient(banner, lang, effectivePlatform)
+                : BannerResponse.FromEntity(banner);
+            return Ok(bannerResponse);
         }
         catch (Exception ex)
         {
@@ -178,6 +264,83 @@ public sealed class BannersController : ControllerBase
             if (request.Lang != null) banner.Lang = request.Lang;
             if (request.Path != null) banner.Path = request.Path;
             if (request.IsActive.HasValue) banner.IsActive = request.IsActive.Value;
+
+            // Update language-specific image URLs
+            if (request.ImageUrls != null)
+            {
+                var existingUrls = banner.GetImageUrls();
+                var newUrls = request.ImageUrls.ToDictionary();
+                foreach (var (key, value) in newUrls)
+                {
+                    existingUrls[key] = value;
+                }
+                banner.SetImageUrls(existingUrls);
+            }
+
+            // Update language-specific deeplinks
+            if (request.Deeplinks != null)
+            {
+                var existingLinks = banner.GetDeeplinks();
+                var newLinks = request.Deeplinks.ToDictionary();
+                foreach (var (key, value) in newLinks)
+                {
+                    existingLinks[key] = value;
+                }
+                banner.SetDeeplinks(existingLinks);
+            }
+
+            // Update platform-specific configurations
+            if (request.Platforms != null)
+            {
+                var existingPlatforms = banner.GetPlatforms();
+                var newPlatforms = request.Platforms.ToEntity();
+
+                // Merge mobile config
+                if (newPlatforms.Mobile != null)
+                {
+                    existingPlatforms.Mobile ??= new();
+                    if (newPlatforms.Mobile.ImageUrls != null)
+                    {
+                        existingPlatforms.Mobile.ImageUrls ??= new();
+                        foreach (var (key, value) in newPlatforms.Mobile.ImageUrls)
+                        {
+                            existingPlatforms.Mobile.ImageUrls[key] = value;
+                        }
+                    }
+                    if (newPlatforms.Mobile.Deeplinks != null)
+                    {
+                        existingPlatforms.Mobile.Deeplinks ??= new();
+                        foreach (var (key, value) in newPlatforms.Mobile.Deeplinks)
+                        {
+                            existingPlatforms.Mobile.Deeplinks[key] = value;
+                        }
+                    }
+                }
+
+                // Merge web config
+                if (newPlatforms.Web != null)
+                {
+                    existingPlatforms.Web ??= new();
+                    if (newPlatforms.Web.ImageUrls != null)
+                    {
+                        existingPlatforms.Web.ImageUrls ??= new();
+                        foreach (var (key, value) in newPlatforms.Web.ImageUrls)
+                        {
+                            existingPlatforms.Web.ImageUrls[key] = value;
+                        }
+                    }
+                    if (newPlatforms.Web.Deeplinks != null)
+                    {
+                        existingPlatforms.Web.Deeplinks ??= new();
+                        foreach (var (key, value) in newPlatforms.Web.Deeplinks)
+                        {
+                            existingPlatforms.Web.Deeplinks[key] = value;
+                        }
+                    }
+                }
+
+                banner.SetPlatforms(existingPlatforms);
+            }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 

@@ -14,7 +14,7 @@ public sealed class PaymentExpirationService : BackgroundService
     private readonly ILogger<PaymentExpirationService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly PaymentTrackingOptions _options;
-    private DateTime _lastHydratedAtUtc;
+    private bool _hydratedOnStartup;
 
     public PaymentExpirationService(
         IServiceScopeFactory scopeFactory,
@@ -28,7 +28,6 @@ public sealed class PaymentExpirationService : BackgroundService
         _logger = logger;
         _timeProvider = timeProvider;
         _options = options.Value;
-        _lastHydratedAtUtc = DateTime.MinValue;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,6 +36,19 @@ public sealed class PaymentExpirationService : BackgroundService
         {
             _logger.LogInformation("Payment expiration sweep is disabled");
             return;
+        }
+
+        try
+        {
+            await HydrateTrackedPaymentsOnStartupAsync(stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to hydrate pending payments on startup");
         }
 
         var sweepInterval = GetSweepInterval();
@@ -68,20 +80,10 @@ public sealed class PaymentExpirationService : BackgroundService
 
     private async Task SweepAsync(CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         PruneTrackedPayments(now);
-        await HydrateTrackedPaymentsIfNeededAsync(dbContext, now, cancellationToken);
 
         var trackedPayments = _paymentTracker.GetTrackedPayments();
-        if (trackedPayments.Count == 0)
-        {
-            return;
-        }
-
-        trackedPayments = await SyncTrackedPaymentsFromDbAsync(dbContext, trackedPayments, now, cancellationToken);
         if (trackedPayments.Count == 0)
         {
             return;
@@ -99,6 +101,9 @@ public sealed class PaymentExpirationService : BackgroundService
         {
             return;
         }
+
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var expiredTransactions = await dbContext.Transactions
             .Where(transaction =>
@@ -143,17 +148,15 @@ public sealed class PaymentExpirationService : BackgroundService
         _logger.LogInformation("Expired {Count} pending payments", expiredCount);
     }
 
-    private async Task HydrateTrackedPaymentsIfNeededAsync(
-        AppDbContext dbContext,
-        DateTime now,
-        CancellationToken cancellationToken)
+    private async Task HydrateTrackedPaymentsOnStartupAsync(CancellationToken cancellationToken)
     {
-        var hydrationInterval = GetHydrationInterval();
-        if (now - _lastHydratedAtUtc < hydrationInterval)
+        if (_hydratedOnStartup)
         {
             return;
         }
 
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var query = dbContext.Transactions
             .AsNoTracking()
             .Where(transaction =>
@@ -162,97 +165,18 @@ public sealed class PaymentExpirationService : BackgroundService
                 transaction.Status < (int)TransactionState.Paid &&
                 transaction.CreateTime > 0);
 
-        if (_lastHydratedAtUtc != DateTime.MinValue)
-        {
-            var lookbackMinutes = _options.ActivePaymentsLookbackMinutes;
-            if (lookbackMinutes > 0)
-            {
-                var cutoff = now.AddMinutes(-lookbackMinutes);
-                var cutoffMillis = new DateTimeOffset(cutoff).ToUnixTimeMilliseconds();
-                query = query.Where(transaction => transaction.CreateTime >= cutoffMillis);
-            }
-        }
-
         var pending = await query.ToListAsync(cancellationToken);
         foreach (var transaction in pending)
         {
             _paymentTracker.TrackPayment(transaction);
         }
 
-        _lastHydratedAtUtc = now;
+        _hydratedOnStartup = true;
 
         if (pending.Count > 0)
         {
-            _logger.LogDebug("Hydrated {Count} pending payments for expiration tracking", pending.Count);
+            _logger.LogInformation("Hydrated {Count} pending payments for expiration tracking", pending.Count);
         }
-    }
-
-    private async Task<IReadOnlyCollection<TrackedPayment>> SyncTrackedPaymentsFromDbAsync(
-        AppDbContext dbContext,
-        IReadOnlyCollection<TrackedPayment> trackedPayments,
-        DateTime now,
-        CancellationToken cancellationToken)
-    {
-        if (trackedPayments.Count == 0)
-        {
-            return trackedPayments;
-        }
-
-        var trackedIds = trackedPayments
-            .Select(payment => payment.PaymentId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        if (trackedIds.Count == 0)
-        {
-            return trackedPayments;
-        }
-
-        var statuses = await dbContext.Transactions
-            .AsNoTracking()
-            .Where(transaction => trackedIds.Contains(transaction.Id))
-            .Select(transaction => new
-            {
-                transaction.Id,
-                transaction.Status,
-                transaction.Provider,
-                transaction.CreateTime
-            })
-            .ToListAsync(cancellationToken);
-
-        var statusLookup = statuses.ToDictionary(entry => entry.Id, StringComparer.Ordinal);
-
-        foreach (var trackedPayment in trackedPayments)
-        {
-            if (!statusLookup.TryGetValue(trackedPayment.PaymentId, out var dbPayment))
-            {
-                _paymentTracker.UntrackPayment(trackedPayment.PaymentId);
-                continue;
-            }
-
-            if (!IsPendingStatus(dbPayment.Status))
-            {
-                _paymentTracker.UntrackPayment(trackedPayment.PaymentId);
-                continue;
-            }
-
-            if (trackedPayment.Status != dbPayment.Status ||
-                trackedPayment.CreateTime != dbPayment.CreateTime ||
-                !string.Equals(trackedPayment.Provider, dbPayment.Provider, StringComparison.OrdinalIgnoreCase) ||
-                trackedPayment.LastCheckedAt == null)
-            {
-                _paymentTracker.TrackPayment(trackedPayment with
-                {
-                    Status = dbPayment.Status,
-                    Provider = dbPayment.Provider,
-                    CreateTime = dbPayment.CreateTime,
-                    LastCheckedAt = now
-                });
-            }
-        }
-
-        return _paymentTracker.GetTrackedPayments();
     }
 
     private void PruneTrackedPayments(DateTime now)
@@ -282,17 +206,6 @@ public sealed class PaymentExpirationService : BackgroundService
         if (seconds <= 0)
         {
             seconds = 60;
-        }
-
-        return TimeSpan.FromSeconds(seconds);
-    }
-
-    private TimeSpan GetHydrationInterval()
-    {
-        var seconds = _options.HydrationIntervalSeconds;
-        if (seconds <= 0)
-        {
-            seconds = 300;
         }
 
         return TimeSpan.FromSeconds(seconds);

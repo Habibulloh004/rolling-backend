@@ -213,6 +213,9 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.Path).HasColumnName("path");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.ImageUrls).HasColumnName("image_urls").HasDefaultValue("{}");
+            entity.Property(e => e.Deeplinks).HasColumnName("deeplinks").HasDefaultValue("{}");
+            entity.Property(e => e.Platforms).HasColumnName("platforms").HasDefaultValue("{}");
         });
 
         modelBuilder.Entity<ChatThreadRecord>(entity =>

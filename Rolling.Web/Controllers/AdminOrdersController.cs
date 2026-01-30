@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Infrastructure.Persistence.Postgres;
+using Rolling.Infrastructure.Persistence.Postgres.Entities;
 
 namespace Rolling.Web.Controllers;
 
@@ -19,12 +20,51 @@ public sealed class AdminOrdersController : ControllerBase
     public async Task<IActionResult> ListAsync(
         [FromQuery] int take = 100,
         [FromQuery] int skip = 0,
+        [FromQuery] string? search = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] int? status = null,
         CancellationToken cancellationToken = default)
     {
         var size = Math.Clamp(take, 1, 500);
 
-        var orders = await _dbContext.Orders
-            .AsNoTracking()
+        var query = _dbContext.Orders.AsNoTracking();
+
+        // Apply search filter (ID, OrderNumber, FirstName, LastName, Phone)
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.Trim().ToLower();
+            query = query.Where(o =>
+                o.Id.ToLower().Contains(searchLower) ||
+                o.OrderNumber.ToLower().Contains(searchLower) ||
+                (o.FirstName != null && o.FirstName.ToLower().Contains(searchLower)) ||
+                (o.LastName != null && o.LastName.ToLower().Contains(searchLower)) ||
+                o.Phone.ToLower().Contains(searchLower));
+        }
+
+        // Apply date range filter
+        if (dateFrom.HasValue)
+        {
+            var fromUtc = DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc);
+            query = query.Where(o => o.CreatedAt >= fromUtc);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var toUtc = DateTime.SpecifyKind(dateTo.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            query = query.Where(o => o.CreatedAt <= toUtc);
+        }
+
+        // Apply status filter
+        if (status.HasValue && Enum.IsDefined(typeof(OrderStatus), status.Value))
+        {
+            query = query.Where(o => o.Status == (OrderStatus)status.Value);
+        }
+
+        // Get total count for pagination info
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var orders = await query
             .OrderByDescending(o => o.CreatedAt)
             .Skip(skip)
             .Take(size)
@@ -52,7 +92,7 @@ public sealed class AdminOrdersController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        return Ok(orders);
+        return Ok(new { items = orders, totalCount, take = size, skip });
     }
 
     [HttpGet("{id}")]

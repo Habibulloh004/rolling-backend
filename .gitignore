@@ -37,9 +37,11 @@ coverage/
 *.sqlite3
 
 # App settings with local secrets
+appsettings.json
 appsettings.Development.json
 appsettings.Local.json
 appsettings.*.local.json
+.env
 
 # Runtime uploads
 Rolling.Web/wwwroot/uploads/

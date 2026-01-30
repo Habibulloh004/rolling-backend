@@ -1,11 +1,13 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Abstractions.Realtime;
 using Rolling.Application.Notifications.Commands;
 using Rolling.Application.Notifications.Contracts;
 using Rolling.Application.Notifications.DTOs;
 using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Notifications;
+using Rolling.Infrastructure.Persistence.Postgres;
 
 namespace Rolling.Web.Controllers;
 
@@ -17,30 +19,87 @@ public sealed class NotificationsController : ControllerBase
     private readonly ICacheRevalidationPublisher _publisher;
     private readonly TimeProvider _timeProvider;
     private readonly NotificationService _pushService;
+    private readonly AppDbContext _dbContext;
 
     public NotificationsController(
         INotificationService notificationService,
         ICacheRevalidationPublisher publisher,
         TimeProvider timeProvider,
-        NotificationService pushService)
+        NotificationService pushService,
+        AppDbContext dbContext)
     {
         _notificationService = notificationService;
         _publisher = publisher;
         _timeProvider = timeProvider;
         _pushService = pushService;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyCollection<NotificationDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(NotificationsListResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAsync(
         [FromQuery] string lang = "en",
         [FromQuery] int take = 20,
+        [FromQuery] int skip = 0,
+        [FromQuery] string? search = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
         CancellationToken cancellationToken = default)
     {
         var validLang = NormalizeLang(lang);
-        var notifications = await _notificationService.GetRecentAsync(take, validLang, cancellationToken);
-        return Ok(notifications);
+        var size = Math.Clamp(take, 1, 500);
+
+        var query = _dbContext.Notifications.AsNoTracking();
+
+        // Apply search filter (searches in all language titles and bodies)
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.Trim().ToLower();
+            query = query.Where(n =>
+                n.EnTitle.ToLower().Contains(searchLower) ||
+                n.EnBody.ToLower().Contains(searchLower) ||
+                n.RuTitle.ToLower().Contains(searchLower) ||
+                n.RuBody.ToLower().Contains(searchLower) ||
+                n.UzTitle.ToLower().Contains(searchLower) ||
+                n.UzBody.ToLower().Contains(searchLower));
+        }
+
+        // Apply date range filter
+        if (dateFrom.HasValue)
+        {
+            var fromUtc = DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc);
+            query = query.Where(n => n.CreatedAt >= fromUtc);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var toUtc = DateTime.SpecifyKind(dateTo.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+            query = query.Where(n => n.CreatedAt <= toUtc);
+        }
+
+        // Get total count for pagination
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(n => n.CreatedAt)
+            .Skip(skip)
+            .Take(size)
+            .ToListAsync(cancellationToken);
+
+        var notifications = items
+            .Select(entity => new NotificationDto(
+                entity.Id,
+                entity.GetTitle(validLang),
+                entity.GetBody(validLang),
+                entity.CreatedAt))
+            .ToList();
+
+        return Ok(new NotificationsListResponse(notifications, totalCount));
     }
+
+    public sealed record NotificationsListResponse(
+        IReadOnlyCollection<NotificationDto> Items,
+        int TotalCount);
 
     [HttpPost]
     [ProducesResponseType(typeof(CreateNotificationResponse), StatusCodes.Status201Created)]

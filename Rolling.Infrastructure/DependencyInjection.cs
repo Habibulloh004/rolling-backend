@@ -22,6 +22,7 @@ using Rolling.Infrastructure.Payments;
 using Rolling.Infrastructure.Persistence;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Redis;
+using Rolling.Infrastructure.Seeding;
 using Rolling.Infrastructure.Time;
 using StackExchange.Redis;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -129,6 +130,9 @@ public static class DependencyInjection
 
         // Pending Payment Tracker (singleton for tracking pending payments across requests)
         services.AddSingleton<PendingPaymentTracker>();
+
+        // Branch Configuration Seeder (HttpClient for Poster API calls)
+        services.AddHttpClient<BranchConfigurationSeeder>();
 
         return services;
     }
