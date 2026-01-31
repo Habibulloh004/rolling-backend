@@ -32,6 +32,11 @@ public sealed class NotificationService : INotificationService
             .ToList();
     }
 
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    {
+        return await _repository.DeleteAsync(id, cancellationToken);
+    }
+
     private static NotificationDto Map(Notification notification) =>
         new(notification.Id, notification.Title, notification.Message, notification.CreatedAt);
 }

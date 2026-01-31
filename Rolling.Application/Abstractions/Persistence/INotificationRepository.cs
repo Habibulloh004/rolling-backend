@@ -8,4 +8,6 @@ public interface INotificationRepository
     Task<Notification> SaveAsync(CreateNotificationCommand command, CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<Notification>> GetRecentAsync(int take, string lang, CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(int id, CancellationToken cancellationToken);
 }

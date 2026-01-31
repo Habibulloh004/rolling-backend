@@ -34,6 +34,17 @@ public sealed class PersistingNotificationRepository : INotificationRepository
         return notification;
     }
 
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    {
+        var deleted = await _postgresRepository.DeleteAsync(id, cancellationToken);
+        if (deleted)
+        {
+            await _cache.InvalidateNotificationCacheAsync(cancellationToken);
+        }
+
+        return deleted;
+    }
+
     public async Task<IReadOnlyCollection<Notification>> GetRecentAsync(int take, string lang, CancellationToken cancellationToken)
     {
         // Try cache first

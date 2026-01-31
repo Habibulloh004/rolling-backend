@@ -57,6 +57,19 @@ public sealed class PostgresNotificationRepository
             .ToList();
     }
 
+    public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entity = await _dbContext.Notifications.FindAsync(new object[] { id }, cancellationToken);
+        if (entity is null)
+            return false;
+
+        _dbContext.Notifications.Remove(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<IReadOnlyCollection<NotificationRecord>> GetAllRecentAsync(int take, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

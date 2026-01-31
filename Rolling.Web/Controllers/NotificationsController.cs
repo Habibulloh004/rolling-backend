@@ -20,19 +20,22 @@ public sealed class NotificationsController : ControllerBase
     private readonly TimeProvider _timeProvider;
     private readonly NotificationService _pushService;
     private readonly AppDbContext _dbContext;
+    private readonly ILogger<NotificationsController> _logger;
 
     public NotificationsController(
         INotificationService notificationService,
         ICacheRevalidationPublisher publisher,
         TimeProvider timeProvider,
         NotificationService pushService,
-        AppDbContext dbContext)
+        AppDbContext dbContext,
+        ILogger<NotificationsController> logger)
     {
         _notificationService = notificationService;
         _publisher = publisher;
         _timeProvider = timeProvider;
         _pushService = pushService;
         _dbContext = dbContext;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -87,19 +90,53 @@ public sealed class NotificationsController : ControllerBase
             .ToListAsync(cancellationToken);
 
         var notifications = items
-            .Select(entity => new NotificationDto(
+            .Select(entity => new NotificationAdminDto(
                 entity.Id,
-                entity.GetTitle(validLang),
-                entity.GetBody(validLang),
+                entity.EnTitle,
+                entity.EnBody,
+                entity.RuTitle,
+                entity.RuBody,
+                entity.UzTitle,
+                entity.UzBody,
                 entity.CreatedAt))
             .ToList();
 
         return Ok(new NotificationsListResponse(notifications, totalCount));
     }
 
+    public sealed record NotificationAdminDto(
+        int Id,
+        string EnTitle,
+        string EnBody,
+        string RuTitle,
+        string RuBody,
+        string UzTitle,
+        string UzBody,
+        DateTimeOffset CreatedAt);
+
     public sealed record NotificationsListResponse(
-        IReadOnlyCollection<NotificationDto> Items,
+        IReadOnlyCollection<NotificationAdminDto> Items,
         int TotalCount);
+
+    [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var deleted = await _notificationService.DeleteAsync(id, cancellationToken);
+        if (!deleted)
+            return NotFound();
+
+        try
+        {
+            await PublishRevalidationAsync("deleted", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast notification revalidation for delete (Id={Id})", id);
+        }
+        return NoContent();
+    }
 
     [HttpPost]
     [ProducesResponseType(typeof(CreateNotificationResponse), StatusCodes.Status201Created)]
