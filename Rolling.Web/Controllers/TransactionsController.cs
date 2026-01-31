@@ -51,7 +51,7 @@ public sealed class TransactionsController : ControllerBase
     {
         var transaction = await _dbContext.Transactions
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == id || x.TransactionId == id, cancellationToken);
 
         if (transaction is null)
         {
