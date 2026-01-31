@@ -28,7 +28,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AdminCors", policy =>
     {
         policy
-            .WithOrigins("http://localhost:3000", "http://localhost:3001")
+            .WithOrigins("http://localhost:3000", "http://localhost:3001", "https://rolling-admin.vercel.app")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
