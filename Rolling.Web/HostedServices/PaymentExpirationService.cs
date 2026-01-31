@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Configuration;
 using Rolling.Infrastructure.Payments;
+using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 
@@ -104,6 +106,7 @@ public sealed class PaymentExpirationService : BackgroundService
 
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
 
         var expiredTransactions = await dbContext.Transactions
             .Where(transaction =>
@@ -118,6 +121,7 @@ public sealed class PaymentExpirationService : BackgroundService
         }
 
         var expiredCount = 0;
+        var updatedOrders = new List<Order>();
         foreach (var transaction in expiredTransactions)
         {
             transaction.Status = (int)TransactionState.PendingCanceled;
@@ -137,6 +141,7 @@ public sealed class PaymentExpirationService : BackgroundService
                 order.Status = OrderStatus.Cancelled;
                 order.PaymentErrorMessage ??= "Payment expired";
                 order.UpdatedAt = now;
+                updatedOrders.Add(order);
             }
 
             expiredCount++;
@@ -144,6 +149,13 @@ public sealed class PaymentExpirationService : BackgroundService
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var order in updatedOrders)
+        {
+            await orderUpdatesPublisher.PublishAsync(
+                OrderUpdateEventFactory.Create(order, "updated"),
+                cancellationToken);
+        }
 
         _logger.LogInformation("Expired {Count} pending payments", expiredCount);
     }

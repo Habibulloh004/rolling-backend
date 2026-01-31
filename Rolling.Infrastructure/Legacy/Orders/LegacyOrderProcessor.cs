@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Poster;
@@ -15,6 +16,7 @@ public sealed class OrderProcessor
     private readonly ActiveOrderTracker _orderTracker;
     private readonly NotificationTokenStore _tokenStore;
     private readonly AppDbContext _dbContext;
+    private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<OrderProcessor> _logger;
 
     public OrderProcessor(
@@ -23,6 +25,7 @@ public sealed class OrderProcessor
         ActiveOrderTracker orderTracker,
         NotificationTokenStore tokenStore,
         AppDbContext dbContext,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<OrderProcessor> logger)
     {
         _posterService = posterService;
@@ -30,6 +33,7 @@ public sealed class OrderProcessor
         _orderTracker = orderTracker;
         _tokenStore = tokenStore;
         _dbContext = dbContext;
+        _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
     }
 
@@ -70,6 +74,9 @@ public sealed class OrderProcessor
         if (ensuredOrder is not null)
         {
             TrackOrderForPolling(ensuredOrder);
+            await _orderUpdatesPublisher.PublishAsync(
+                OrderUpdateEventFactory.Create(ensuredOrder, "updated"),
+                cancellationToken);
         }
 
         return result.TransactionId ?? result.IncomingOrderId;

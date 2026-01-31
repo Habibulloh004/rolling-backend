@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Configuration;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
@@ -91,6 +92,7 @@ public sealed class OrderStatusPollingService : BackgroundService
         var posterService = scope.ServiceProvider.GetRequiredService<PosterService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
 
         var now = DateTime.UtcNow;
         PruneTrackedOrders(now);
@@ -242,13 +244,13 @@ public sealed class OrderStatusPollingService : BackgroundService
                         continue;
                     }
 
-                    var dbUpdated = await UpdateOrderStatusInDbAsync(
+                    var updatedOrder = await UpdateOrderStatusInDbAsync(
                         dbContext,
                         order.OrderId,
                         posterStatus.Value,
                         cancellationToken);
 
-                    if (!dbUpdated)
+                    if (updatedOrder is null)
                     {
                         skippedNoUpdate++;
                         continue;
@@ -256,6 +258,10 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     updatedDbCount++;
                     UpdateTrackedOrderStatus(order.OrderId, posterStatus.Value);
+
+                    await orderUpdatesPublisher.PublishAsync(
+                        OrderUpdateEventFactory.Create(updatedOrder, "updated"),
+                        cancellationToken);
 
                     if (!ShouldNotifyStatus(posterStatus.Value))
                     {
@@ -1775,7 +1781,7 @@ public sealed class OrderStatusPollingService : BackgroundService
             .Replace("-", string.Empty, StringComparison.Ordinal)
             .Replace(" ", string.Empty, StringComparison.Ordinal);
 
-    private async Task<bool> UpdateOrderStatusInDbAsync(
+    private async Task<Order?> UpdateOrderStatusInDbAsync(
         AppDbContext dbContext,
         string orderId,
         OrderStatus newStatus,
@@ -1787,7 +1793,7 @@ public sealed class OrderStatusPollingService : BackgroundService
             _logger.LogWarning(
                 "Polling update skipped - order not found in DB: OrderId={OrderId}",
                 orderId);
-            return false;
+            return null;
         }
 
         if (order.Status == newStatus)
@@ -1796,7 +1802,7 @@ public sealed class OrderStatusPollingService : BackgroundService
                 "Polling update skipped - status unchanged: OrderId={OrderId}, Status={Status}",
                 orderId,
                 newStatus);
-            return false;
+            return null;
         }
 
         // Prevent backward status transitions (cancelled wins unless already terminal).
@@ -1806,7 +1812,7 @@ public sealed class OrderStatusPollingService : BackgroundService
             _logger.LogDebug(
                 "Ignoring backward status transition for order {OrderId}: {CurrentStatus} -> {NewStatus}",
                 orderId, order.Status, newStatus);
-            return false;
+            return null;
         }
 
         order.Status = newStatus;
@@ -1816,7 +1822,7 @@ public sealed class OrderStatusPollingService : BackgroundService
             "Order status updated via polling: OrderId={OrderId}, Status={Status}",
             orderId,
             newStatus);
-        return true;
+        return order;
     }
 
     /// <summary>

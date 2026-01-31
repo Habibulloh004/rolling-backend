@@ -3,6 +3,7 @@ using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
+using Rolling.Application.Abstractions.Realtime;
 
 namespace Rolling.Web.Services.Webhooks;
 
@@ -13,6 +14,7 @@ public sealed class PosterTransactionWebhookHandler
     private readonly NotificationService _notificationService;
     private readonly NotificationTokenStore _tokenStore;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<PosterTransactionWebhookHandler> _logger;
 
     public PosterTransactionWebhookHandler(
@@ -21,6 +23,7 @@ public sealed class PosterTransactionWebhookHandler
         NotificationService notificationService,
         NotificationTokenStore tokenStore,
         ActiveOrderTracker orderTracker,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<PosterTransactionWebhookHandler> logger)
     {
         _dbContext = dbContext;
@@ -28,6 +31,7 @@ public sealed class PosterTransactionWebhookHandler
         _notificationService = notificationService;
         _tokenStore = tokenStore;
         _orderTracker = orderTracker;
+        _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
     }
 
@@ -91,6 +95,10 @@ public sealed class PosterTransactionWebhookHandler
         _logger.LogInformation(
             "Order status updated in database: OrderId={OrderId}, OrderNumber={OrderNumber}, NewStatus={Status}",
             order.Id, order.OrderNumber, mergedStatus);
+
+        await _orderUpdatesPublisher.PublishAsync(
+            OrderUpdateEventFactory.Create(order, "updated"),
+            cancellationToken);
 
         UpdateTrackedOrder(order, mergedStatus);
 

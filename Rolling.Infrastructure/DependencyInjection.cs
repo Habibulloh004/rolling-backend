@@ -105,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IChatMessageRepository>(provider => provider.GetRequiredService<PostgresChatRepository>());
         services.AddSingleton<IEventBus, InMemoryEventBus>();
         services.TryAddSingleton<ICacheRevalidationPublisher, NullCacheRevalidationPublisher>();
+        services.TryAddSingleton<IOrderUpdatesPublisher, NullOrderUpdatesPublisher>();
 
         // Redis Banner Cache
         services.AddSingleton<Rolling.Infrastructure.Persistence.Redis.IRedisBannerCache, Rolling.Infrastructure.Persistence.Redis.RedisBannerCache>();

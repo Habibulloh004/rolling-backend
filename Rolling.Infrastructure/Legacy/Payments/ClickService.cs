@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Configuration;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -17,6 +18,7 @@ public sealed class ClickService
     private readonly OrderProcessor _orderProcessor;
     private readonly PendingPaymentTracker _pendingPaymentTracker;
     private readonly ClickSignatureValidator _signatureValidator;
+    private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<ClickService> _logger;
 
     public ClickService(
@@ -24,12 +26,14 @@ public sealed class ClickService
         IOptions<ClickOptions> options,
         OrderProcessor orderProcessor,
         PendingPaymentTracker pendingPaymentTracker,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<ClickService> logger)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _orderProcessor = orderProcessor;
         _pendingPaymentTracker = pendingPaymentTracker;
+        _orderUpdatesPublisher = orderUpdatesPublisher;
         _signatureValidator = new ClickSignatureValidator(_options);
         _logger = logger;
     }
@@ -264,7 +268,17 @@ public sealed class ClickService
 
         await _dbContext.Transactions.AddAsync(orderDoc, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(_dbContext, orderDoc, request.OrderDetails, cancellationToken);
+        var awaitingOrder = await PaymentOrderBuilder.EnsureAwaitingPaymentOrderAsync(
+            _dbContext,
+            orderDoc,
+            request.OrderDetails,
+            cancellationToken);
+        if (awaitingOrder is not null)
+        {
+            await _orderUpdatesPublisher.PublishAsync(
+                OrderUpdateEventFactory.Create(awaitingOrder, "updated"),
+                cancellationToken);
+        }
         UpdatePendingTracking(orderDoc);
 
         var checkoutUrl = BuildCheckoutUrl(orderDoc.Id, request.Amount, request.Url, request.OrderDetails);

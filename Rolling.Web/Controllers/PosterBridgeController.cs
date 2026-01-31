@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -19,6 +20,7 @@ public sealed class PosterBridgeController : ControllerBase
     private readonly AppDbContext _dbContext;
     private readonly ActiveOrderTracker _orderTracker;
     private readonly NotificationTokenStore _tokenStore;
+    private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<PosterBridgeController> _logger;
 
     public PosterBridgeController(
@@ -26,12 +28,14 @@ public sealed class PosterBridgeController : ControllerBase
         AppDbContext dbContext,
         ActiveOrderTracker orderTracker,
         NotificationTokenStore tokenStore,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<PosterBridgeController> logger)
     {
         _posterService = posterService;
         _dbContext = dbContext;
         _orderTracker = orderTracker;
         _tokenStore = tokenStore;
+        _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
     }
 
@@ -404,6 +408,9 @@ public sealed class PosterBridgeController : ControllerBase
             _logger.LogInformation(
                 "SUCCESS: Database save completed (post-Poster). Saved {Count} entities. Order {OrderId} with OrderNumber {OrderNumber}, PosterIncomingOrderId {IncomingOrderId}",
                 savedCount, orderId, order.OrderNumber, incomingOrderId);
+            await _orderUpdatesPublisher.PublishAsync(
+                OrderUpdateEventFactory.Create(order, "created"),
+                cancellationToken);
         }
         catch (DbUpdateException ex)
         {
@@ -731,6 +738,9 @@ public sealed class PosterBridgeController : ControllerBase
             _logger.LogInformation(
                 "MOCK SUCCESS: Database save completed. Saved {Count} entities. Order {OrderId} with OrderNumber {OrderNumber}, FakeIncomingOrderId {IncomingOrderId}, FakeTransactionId {TransactionId}",
                 savedCount, orderId, orderNumber, fakeIncomingOrderId, fakeTransactionId);
+            await _orderUpdatesPublisher.PublishAsync(
+                OrderUpdateEventFactory.Create(order, "created"),
+                cancellationToken);
         }
         catch (Exception ex)
         {

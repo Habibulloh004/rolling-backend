@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
@@ -17,15 +18,18 @@ public sealed class ClientOrdersController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<ClientOrdersController> _logger;
 
     public ClientOrdersController(
         AppDbContext dbContext,
         ActiveOrderTracker orderTracker,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<ClientOrdersController> logger)
     {
         _dbContext = dbContext;
         _orderTracker = orderTracker;
+        _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
     }
 
@@ -132,6 +136,10 @@ public sealed class ClientOrdersController : ControllerBase
 
         _orderTracker.UpdateOrderStatus(order.Id, OrderStatus.Cancelled);
         _orderTracker.UntrackOrder(order.Id);
+
+        await _orderUpdatesPublisher.PublishAsync(
+            OrderUpdateEventFactory.Create(order, "updated"),
+            cancellationToken);
 
         return Ok(new
         {

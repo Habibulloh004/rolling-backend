@@ -43,11 +43,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<WebSocketConnectionManager>();
 builder.Services.AddSingleton<ICacheRevalidationPublisher, WebSocketCacheRevalidationPublisher>();
+builder.Services.AddSingleton<OrderUpdatesConnectionManager>();
+builder.Services.AddSingleton<IOrderUpdatesPublisher, WebSocketOrderUpdatesPublisher>();
 builder.Services.AddSingleton<AdminChatCoordinator>();
 builder.Services.AddSingleton<ChatRealtimeCoordinator>();
 builder.Services.AddScoped<ChatSocketHandler>();
 builder.Services.AddScoped<AdminChatSocketHandler>();
 builder.Services.AddScoped<PosterUpdatesSocketHandler>();
+builder.Services.AddScoped<OrderUpdatesSocketHandler>();
 builder.Services.AddHostedService<NotificationCleanupService>();
 builder.Services.AddHostedService<PosterCacheRefreshService>();
 builder.Services.AddHostedService<OrderStatusPollingService>();
@@ -143,6 +146,15 @@ app.Map("/ws/poster-updates", builder =>
     builder.Run(async context =>
     {
         var handler = context.RequestServices.GetRequiredService<PosterUpdatesSocketHandler>();
+        await handler.HandleAsync(context);
+    });
+});
+
+app.Map("/ws/orders", builder =>
+{
+    builder.Run(async context =>
+    {
+        var handler = context.RequestServices.GetRequiredService<OrderUpdatesSocketHandler>();
         await handler.HandleAsync(context);
     });
 });
