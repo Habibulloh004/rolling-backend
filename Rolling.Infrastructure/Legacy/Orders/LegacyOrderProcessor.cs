@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Messaging;
@@ -54,7 +55,7 @@ public sealed class OrderProcessor
         var result = serviceMode switch
         {
             1 => await HandleVenueOrderAsync(orderDetails, order.Amount, cancellationToken),
-            2 or 3 => await HandleDeliveryOrderAsync(orderDetails, cancellationToken),
+            2 or 3 => await HandleDeliveryOrderAsync(orderDetails, order.Amount, cancellationToken),
             _ => null
         };
 
@@ -112,7 +113,8 @@ public sealed class OrderProcessor
         var spotName = root.TryGetProperty("spot_name", out var spotNameElement) ? spotNameElement.GetString() ?? string.Empty : string.Empty;
         var service = root.TryGetProperty("service", out var serviceElement) ? serviceElement.GetString() : null;
 
-        using var response = await _posterService.CreateIncomingOrderAsync(root, cancellationToken);
+        var posterPayload = NormalizePosterPayload(root, amount);
+        using var response = await _posterService.CreateIncomingOrderAsync(posterPayload, cancellationToken);
         var result = ExtractPosterIds(response);
         if (result is null)
         {
@@ -134,9 +136,10 @@ public sealed class OrderProcessor
         return result;
     }
 
-    private async Task<PosterOrderResult?> HandleDeliveryOrderAsync(JsonDocument orderDetails, CancellationToken cancellationToken)
+    private async Task<PosterOrderResult?> HandleDeliveryOrderAsync(JsonDocument orderDetails, decimal amount, CancellationToken cancellationToken)
     {
-        using var response = await _posterService.CreateIncomingOrderAsync(orderDetails.RootElement, cancellationToken);
+        var posterPayload = NormalizePosterPayload(orderDetails.RootElement, amount);
+        using var response = await _posterService.CreateIncomingOrderAsync(posterPayload, cancellationToken);
         return ExtractPosterIds(response);
     }
 
@@ -176,6 +179,129 @@ public sealed class OrderProcessor
     }
 
     private sealed record PosterOrderResult(string? TransactionId, string? IncomingOrderId);
+
+    private static JsonElement NormalizePosterPayload(JsonElement root, decimal referenceTotal)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return root;
+        }
+
+        if (!ShouldConvertToMinorUnits(root, referenceTotal))
+        {
+            return root;
+        }
+
+        var node = JsonNode.Parse(root.GetRawText()) as JsonObject;
+        if (node is null)
+        {
+            return root;
+        }
+
+        NormalizeMoneyField(node, "delivery_price");
+
+        if (node.TryGetPropertyValue("products", out var productsNode) && productsNode is JsonArray products)
+        {
+            foreach (var productNode in products)
+            {
+                if (productNode is not JsonObject productObject)
+                {
+                    continue;
+                }
+
+                NormalizeMoneyField(productObject, "price");
+                NormalizeMoneyField(productObject, "price_override");
+            }
+        }
+
+        return JsonSerializer.SerializeToElement(node);
+    }
+
+    private static void NormalizeMoneyField(JsonObject obj, string field)
+    {
+        if (!obj.TryGetPropertyValue(field, out var valueNode) || valueNode is null)
+        {
+            return;
+        }
+
+        if (!TryGetDecimal(valueNode, out var value))
+        {
+            return;
+        }
+
+        if (value <= 0m)
+        {
+            return;
+        }
+
+        var converted = (long)Math.Round(value * 100m);
+        obj[field] = JsonValue.Create(converted);
+    }
+
+    private static bool TryGetDecimal(JsonNode node, out decimal value)
+    {
+        value = 0m;
+        if (node is JsonValue jsonValue)
+        {
+            if (jsonValue.TryGetValue(out decimal numeric))
+            {
+                value = numeric;
+                return true;
+            }
+
+            if (jsonValue.TryGetValue(out string? text) &&
+                !string.IsNullOrWhiteSpace(text) &&
+                decimal.TryParse(text, out var parsed))
+            {
+                value = parsed;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ShouldConvertToMinorUnits(JsonElement root, decimal referenceTotal)
+    {
+        if (referenceTotal <= 0m)
+        {
+            return true;
+        }
+
+        var total = GetDecimal(root, "total");
+        if (total.HasValue && total.Value > referenceTotal * 3m)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static decimal? GetDecimal(JsonElement root, string propertyName)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!root.TryGetProperty(propertyName, out var element))
+        {
+            return null;
+        }
+
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetDecimal(out var numeric))
+        {
+            return numeric;
+        }
+
+        if (element.ValueKind == JsonValueKind.String &&
+            decimal.TryParse(element.GetString(), out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
 
     private void TrackOrderForPolling(Order order)
     {
