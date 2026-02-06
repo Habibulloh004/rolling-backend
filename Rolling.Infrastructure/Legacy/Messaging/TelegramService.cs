@@ -11,6 +11,10 @@ public sealed class TelegramService
     private readonly TelegramOptions _options;
     private readonly ILogger<TelegramService> _logger;
 
+    // Hardcoded Telegram credentials (per user request)
+    private const string HardcodedBotToken = "7051935328:AAFJxJAVsRTPxgj3rrHWty1pEUlMkBgg9_o";
+    private const string HardcodedChatId = "-1002211902296";
+
     public TelegramService(HttpClient httpClient, IOptions<TelegramOptions> options, ILogger<TelegramService> logger)
     {
         _httpClient = httpClient;
@@ -20,16 +24,16 @@ public sealed class TelegramService
 
     public async Task SendMessageAsync(string message, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.BotToken) || string.IsNullOrWhiteSpace(_options.ChatId))
+        if (string.IsNullOrWhiteSpace(HardcodedBotToken) || string.IsNullOrWhiteSpace(HardcodedChatId))
         {
             _logger.LogWarning("Telegram credentials are not configured.");
             return;
         }
 
-        var url = $"https://api.telegram.org/bot{_options.BotToken}/sendMessage";
+        var url = $"https://api.telegram.org/bot{HardcodedBotToken}/sendMessage";
         var payload = new Dictionary<string, string>
         {
-            ["chat_id"] = _options.ChatId,
+            ["chat_id"] = HardcodedChatId,
             ["text"] = message
         };
 
@@ -42,13 +46,13 @@ public sealed class TelegramService
 
     public async Task<object?> SendMessageRawAsync(string message, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.BotToken) || string.IsNullOrWhiteSpace(_options.ChatId))
+        if (string.IsNullOrWhiteSpace(HardcodedBotToken) || string.IsNullOrWhiteSpace(HardcodedChatId))
         {
             _logger.LogWarning("Telegram credentials are not configured.");
             return null;
         }
 
-        var url = $"https://api.telegram.org/bot{_options.BotToken}/sendMessage?chat_id={_options.ChatId}&text={Uri.EscapeDataString(message)}";
+        var url = $"https://api.telegram.org/bot{HardcodedBotToken}/sendMessage?chat_id={HardcodedChatId}&text={Uri.EscapeDataString(message)}";
         var response = await _httpClient.GetAsync(url, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Configuration;
+using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -91,6 +92,7 @@ public sealed class OrderStatusPollingService : BackgroundService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var posterService = scope.ServiceProvider.GetRequiredService<PosterService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
+        var telegramService = scope.ServiceProvider.GetRequiredService<TelegramService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
 
@@ -258,6 +260,11 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     updatedDbCount++;
                     UpdateTrackedOrderStatus(order.OrderId, posterStatus.Value);
+
+                    if (posterStatus.Value == OrderStatus.Cancelled)
+                    {
+                        await TrySendCancelTelegramAsync(dbContext, telegramService, updatedOrder, cancellationToken);
+                    }
 
                     await orderUpdatesPublisher.PublishAsync(
                         OrderUpdateEventFactory.Create(updatedOrder, "updated"),
@@ -1823,6 +1830,35 @@ public sealed class OrderStatusPollingService : BackgroundService
             orderId,
             newStatus);
         return order;
+    }
+
+    private async Task TrySendCancelTelegramAsync(
+        AppDbContext dbContext,
+        TelegramService telegramService,
+        Order order,
+        CancellationToken cancellationToken)
+    {
+        var paymentDescription = TelegramOrderMessageBuilder.BuildPaymentDescription(order);
+        var orderSummary = "Заказ отменен администратором/кассой через Poster POS";
+        var context = await TelegramOrderMessageBuilder.CreateContextAsync(
+            dbContext,
+            order,
+            orderSummary,
+            paymentDescription,
+            cancellationToken);
+        var message = TelegramOrderMessageBuilder.BuildCancelOrderMessage(context);
+
+        try
+        {
+            await telegramService.SendMessageAsync(message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send Telegram cancel message (polling): OrderId={OrderId}, OrderNumber={OrderNumber}",
+                order.Id,
+                order.OrderNumber);
+        }
     }
 
     /// <summary>

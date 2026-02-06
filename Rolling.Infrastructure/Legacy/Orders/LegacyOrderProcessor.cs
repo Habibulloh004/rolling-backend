@@ -54,8 +54,7 @@ public sealed class OrderProcessor
 
         var result = serviceMode switch
         {
-            1 => await HandleVenueOrderAsync(orderDetails, order.Amount, cancellationToken),
-            2 or 3 => await HandleDeliveryOrderAsync(orderDetails, order.Amount, cancellationToken),
+            1 or 2 or 3 => await HandleDeliveryOrderAsync(orderDetails, order.Amount, cancellationToken),
             _ => null
         };
 
@@ -74,6 +73,7 @@ public sealed class OrderProcessor
 
         if (ensuredOrder is not null)
         {
+            await TrySendPaidOrderTelegramAsync(ensuredOrder, order, cancellationToken);
             TrackOrderForPolling(ensuredOrder);
             await _orderUpdatesPublisher.PublishAsync(
                 OrderUpdateEventFactory.Create(ensuredOrder, "updated"),
@@ -179,6 +179,40 @@ public sealed class OrderProcessor
     }
 
     private sealed record PosterOrderResult(string? TransactionId, string? IncomingOrderId);
+
+    private async Task TrySendPaidOrderTelegramAsync(
+        Order order,
+        PaymentTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var provider = transaction.Provider?.Trim().ToLowerInvariant();
+        if (provider is not ("payme" or "click"))
+        {
+            return;
+        }
+
+        var paymentDescription = TelegramOrderMessageBuilder.BuildPaymentDescription(order, provider);
+        var orderSummary = TelegramOrderMessageBuilder.BuildOrderSummary(order, paymentDescription);
+        var context = await TelegramOrderMessageBuilder.CreateContextAsync(
+            _dbContext,
+            order,
+            orderSummary,
+            paymentDescription,
+            cancellationToken);
+        var message = TelegramOrderMessageBuilder.BuildNewOrderMessage(context);
+
+        try
+        {
+            await _telegramService.SendMessageAsync(message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send Telegram new order message: OrderId={OrderId}, Provider={Provider}",
+                order.Id,
+                provider);
+        }
+    }
 
     private static JsonElement NormalizePosterPayload(JsonElement root, decimal referenceTotal)
     {

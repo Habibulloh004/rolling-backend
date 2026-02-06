@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -15,6 +16,7 @@ public sealed class PosterTransactionWebhookHandler
     private readonly NotificationTokenStore _tokenStore;
     private readonly ActiveOrderTracker _orderTracker;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
+    private readonly TelegramService _telegramService;
     private readonly ILogger<PosterTransactionWebhookHandler> _logger;
 
     public PosterTransactionWebhookHandler(
@@ -24,6 +26,7 @@ public sealed class PosterTransactionWebhookHandler
         NotificationTokenStore tokenStore,
         ActiveOrderTracker orderTracker,
         IOrderUpdatesPublisher orderUpdatesPublisher,
+        TelegramService telegramService,
         ILogger<PosterTransactionWebhookHandler> logger)
     {
         _dbContext = dbContext;
@@ -32,6 +35,7 @@ public sealed class PosterTransactionWebhookHandler
         _tokenStore = tokenStore;
         _orderTracker = orderTracker;
         _orderUpdatesPublisher = orderUpdatesPublisher;
+        _telegramService = telegramService;
         _logger = logger;
     }
 
@@ -95,6 +99,11 @@ public sealed class PosterTransactionWebhookHandler
         _logger.LogInformation(
             "Order status updated in database: OrderId={OrderId}, OrderNumber={OrderNumber}, NewStatus={Status}",
             order.Id, order.OrderNumber, mergedStatus);
+
+        if (statusChanged && mergedStatus == OrderStatus.Cancelled)
+        {
+            await TrySendCancelTelegramAsync(order, cancellationToken);
+        }
 
         await _orderUpdatesPublisher.PublishAsync(
             OrderUpdateEventFactory.Create(order, "updated"),
@@ -184,6 +193,31 @@ public sealed class PosterTransactionWebhookHandler
                 "Failed to send push notification via webhook: OrderId={OrderId}, OrderNumber={OrderNumber}, Status={Status}",
                 order.Id, order.OrderNumber, mergedStatus);
             // Don't rethrow - webhook should still return success to Poster
+        }
+    }
+
+    private async Task TrySendCancelTelegramAsync(Order order, CancellationToken cancellationToken)
+    {
+        var paymentDescription = TelegramOrderMessageBuilder.BuildPaymentDescription(order);
+        var orderSummary = "Заказ отменен администратором/кассой через Poster POS";
+        var context = await TelegramOrderMessageBuilder.CreateContextAsync(
+            _dbContext,
+            order,
+            orderSummary,
+            paymentDescription,
+            cancellationToken);
+        var message = TelegramOrderMessageBuilder.BuildCancelOrderMessage(context);
+
+        try
+        {
+            await _telegramService.SendMessageAsync(message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send Telegram cancel message: OrderId={OrderId}, OrderNumber={OrderNumber}",
+                order.Id,
+                order.OrderNumber);
         }
     }
 
