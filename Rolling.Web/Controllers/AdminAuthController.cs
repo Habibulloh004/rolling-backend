@@ -8,7 +8,7 @@ namespace Rolling.Web.Controllers;
 [Route("api/admin/auth")]
 public sealed class AdminAuthController : ControllerBase
 {
-    private const string OwnerPhoneDigits = "998935204050";
+    private const string OwnerPhoneDigits = "998931102200";
 
     private readonly AdminAuthService _authService;
     private readonly ISmsService _smsService;
