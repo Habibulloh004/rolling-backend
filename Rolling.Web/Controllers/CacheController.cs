@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Rolling.Infrastructure.Persistence.Memory;
 using Rolling.Infrastructure.Poster;
+using Rolling.Web.Auth;
 
 namespace Rolling.Web.Controllers;
 
 [ApiController]
 [Route("api/cache")]
+[AdminAuthorize]
 public class CacheController : ControllerBase
 {
     private readonly IInMemoryCacheService _cacheService;

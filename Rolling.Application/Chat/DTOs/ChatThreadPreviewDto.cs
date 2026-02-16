@@ -4,6 +4,7 @@ public sealed record ChatThreadPreviewDto(
     Guid Id,
     Guid? OrderId,
     string? OrderNumber,
+    int? OrderStatus,
     Guid? CustomerId,
     string? CustomerName,
     string? LastMessage,

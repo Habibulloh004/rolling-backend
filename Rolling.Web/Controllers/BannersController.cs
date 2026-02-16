@@ -5,6 +5,7 @@ using Rolling.Application.Abstractions.Realtime;
 using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Redis;
+using Rolling.Web.Auth;
 using Rolling.Web.Models.Banners;
 
 namespace Rolling.Web.Controllers;
@@ -209,6 +210,7 @@ public sealed class BannersController : ControllerBase
     /// <summary>
     /// Create a new banner
     /// </summary>
+    [AdminAuthorize]
     [HttpPost]
     public async Task<IActionResult> CreateBannerAsync([FromBody] CreateBannerRequest request, CancellationToken cancellationToken)
     {
@@ -245,6 +247,7 @@ public sealed class BannersController : ControllerBase
     /// <summary>
     /// Update an existing banner
     /// </summary>
+    [AdminAuthorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateBannerAsync(int id, [FromBody] UpdateBannerRequest request, CancellationToken cancellationToken)
     {
@@ -362,6 +365,7 @@ public sealed class BannersController : ControllerBase
     /// <summary>
     /// Delete a banner (soft delete by setting IsActive to false)
     /// </summary>
+    [AdminAuthorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBannerAsync(int id, CancellationToken cancellationToken)
     {
@@ -395,6 +399,7 @@ public sealed class BannersController : ControllerBase
     /// <summary>
     /// Permanently delete a banner from the database
     /// </summary>
+    [AdminAuthorize]
     [HttpDelete("{id}/permanent")]
     public async Task<IActionResult> PermanentlyDeleteBannerAsync(int id, CancellationToken cancellationToken)
     {

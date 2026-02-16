@@ -21,6 +21,10 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<PosterUser> Users => Set<PosterUser>();
 
+    public DbSet<AdminCredential> AdminCredentials => Set<AdminCredential>();
+
+    public DbSet<AdminRefreshToken> AdminRefreshTokens => Set<AdminRefreshToken>();
+
     public DbSet<NotificationRecord> Notifications => Set<NotificationRecord>();
 
     public DbSet<BusinessTime> Times => Set<BusinessTime>();
@@ -178,6 +182,37 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.UserType).HasColumnName("user_type");
             entity.Property(e => e.AccessMask).HasColumnName("access_mask");
             entity.Property(e => e.LastIn).HasColumnName("last_in");
+        });
+
+        modelBuilder.Entity<AdminCredential>(entity =>
+        {
+            entity.ToTable("admin_credentials");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Login).HasColumnName("login");
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash");
+            entity.Property(e => e.PasswordSalt).HasColumnName("password_salt");
+            entity.Property(e => e.Name).HasColumnName("name");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.HasIndex(e => e.Login).IsUnique();
+            entity.HasMany(e => e.RefreshTokens)
+                .WithOne(token => token.AdminCredential)
+                .HasForeignKey(token => token.AdminCredentialId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdminRefreshToken>(entity =>
+        {
+            entity.ToTable("admin_refresh_tokens");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdminCredentialId).HasColumnName("admin_credential_id");
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash");
+            entity.Property(e => e.ReplacedByTokenHash).HasColumnName("replaced_by_token_hash");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.RevokedAt).HasColumnName("revoked_at");
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => new { e.AdminCredentialId, e.ExpiresAt });
         });
 
         modelBuilder.Entity<NotificationRecord>(entity =>

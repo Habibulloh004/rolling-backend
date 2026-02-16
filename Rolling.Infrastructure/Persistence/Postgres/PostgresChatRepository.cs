@@ -110,7 +110,10 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         return entities.Select(entity => entity.ToDomain()).ToList();
     }
 
-    public async Task<IReadOnlyList<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber)>> GetAllWithLastMessageAsync(int take, int skip, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>> GetAllWithLastMessageAsync(
+        int take,
+        int skip,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var length = Math.Clamp(take, 1, 100);
@@ -124,7 +127,7 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
             .Take(length)
             .ToListAsync(cancellationToken);
 
-        var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber)>();
+        var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>();
 
         foreach (var thread in threads)
         {
@@ -139,12 +142,103 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
             var order = await _dbContext.Orders
                 .AsNoTracking()
                 .Where(o => o.Id == orderIdString)
-                .Select(o => new { o.OrderNumber })
+                .Select(o => new
+                {
+                    o.OrderNumber,
+                    Status = (int)o.Status,
+                    o.FirstName,
+                    o.LastName
+                })
                 .FirstOrDefaultAsync(cancellationToken);
 
-            result.Add((thread.ToDomain(), lastMessage?.ToDomain(), order?.OrderNumber));
+            var orderCustomerName = BuildCustomerName(order?.FirstName, order?.LastName);
+            result.Add((thread.ToDomain(), lastMessage?.ToDomain(), order?.OrderNumber, order?.Status, orderCustomerName));
         }
 
         return result;
+    }
+
+    private static string? BuildCustomerName(string? firstName, string? lastName)
+    {
+        var first = firstName?.Trim();
+        var last = lastName?.Trim();
+
+        var fullName = string.Join(
+            " ",
+            new[] { first, last }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        return string.IsNullOrWhiteSpace(fullName) ? null : fullName;
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetUnreadCountsAsync(
+        IReadOnlyCollection<Guid> threadIds,
+        ChatParticipantRole senderRole,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (threadIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        var unread = await _dbContext.ChatMessages
+            .AsNoTracking()
+            .Where(message =>
+                threadIds.Contains(message.ThreadId) &&
+                message.SenderRole == senderRole &&
+                message.Status != ChatMessageDeliveryStatus.Read)
+            .GroupBy(message => message.ThreadId)
+            .Select(group => new
+            {
+                ThreadId = group.Key,
+                Count = group.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        return unread.ToDictionary(item => item.ThreadId, item => item.Count);
+    }
+
+    public async Task<(int TotalUnread, int ThreadsWithUnread)> GetUnreadSummaryAsync(
+        ChatParticipantRole senderRole,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var query = _dbContext.ChatMessages
+            .AsNoTracking()
+            .Where(message =>
+                message.SenderRole == senderRole &&
+                message.Status != ChatMessageDeliveryStatus.Read);
+
+        var totalUnread = await query.CountAsync(cancellationToken);
+        if (totalUnread == 0)
+        {
+            return (0, 0);
+        }
+
+        var threadsWithUnread = await query
+            .Select(message => message.ThreadId)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        return (totalUnread, threadsWithUnread);
+    }
+
+    public async Task MarkThreadMessagesAsReadAsync(
+        Guid threadId,
+        ChatParticipantRole senderRole,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _dbContext.ChatMessages
+            .Where(message =>
+                message.ThreadId == threadId &&
+                message.SenderRole == senderRole &&
+                message.Status != ChatMessageDeliveryStatus.Read)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(message => message.Status, ChatMessageDeliveryStatus.Read),
+                cancellationToken);
     }
 }

@@ -149,25 +149,92 @@ public sealed class ChatService : IChatService
         cancellationToken.ThrowIfCancellationRequested();
 
         var threadsWithMessages = await _threadRepository.GetAllWithLastMessageAsync(take, skip, cancellationToken);
+        var threadIds = threadsWithMessages.Select(item => item.Thread.Id).ToArray();
+        var unreadCounts = await _messageRepository.GetUnreadCountsAsync(
+            threadIds,
+            ChatParticipantRole.Customer,
+            cancellationToken);
 
         return threadsWithMessages.Select(item =>
         {
             var thread = item.Thread;
             var lastMessage = item.LastMessage;
             var orderNumber = item.OrderNumber;
-            var customerName = thread.Participants
+            var orderStatus = item.OrderStatus;
+            var participantDisplayName = thread.Participants
                 .FirstOrDefault(p => p.Role == ChatParticipantRole.Customer)?.DisplayName;
+            var customerName = ResolveCustomerDisplayName(item.OrderCustomerName, participantDisplayName);
+            unreadCounts.TryGetValue(thread.Id, out var unreadCount);
 
             return new ChatThreadPreviewDto(
                 thread.Id,
                 thread.OrderId,
                 orderNumber,
+                orderStatus,
                 thread.CustomerId,
                 customerName,
                 lastMessage?.Body,
                 lastMessage?.SentAt,
-                0, // UnreadCount - can be implemented later
+                unreadCount,
                 thread.CreatedAt);
         }).ToList();
+    }
+
+    private static string? ResolveCustomerDisplayName(string? orderCustomerName, string? participantDisplayName)
+    {
+        var orderName = orderCustomerName?.Trim();
+        if (!string.IsNullOrWhiteSpace(orderName) && !IsPhoneLike(orderName))
+        {
+            return orderName;
+        }
+
+        var participantName = participantDisplayName?.Trim();
+        if (!string.IsNullOrWhiteSpace(participantName) && !IsPhoneLike(participantName))
+        {
+            return participantName;
+        }
+
+        return null;
+    }
+
+    private static bool IsPhoneLike(string value)
+    {
+        var digitCount = value.Count(char.IsDigit);
+        if (digitCount < 7)
+        {
+            return false;
+        }
+
+        var nonPhoneChars = value.Where(ch => !char.IsDigit(ch) && ch != '+' && ch != '-' && ch != '(' && ch != ')' && !char.IsWhiteSpace(ch));
+        return !nonPhoneChars.Any();
+    }
+
+    public async Task MarkThreadReadAsync(Guid threadId, ChatParticipantRole readerRole, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var counterpartRole = readerRole switch
+        {
+            ChatParticipantRole.Support => ChatParticipantRole.Customer,
+            ChatParticipantRole.Customer => ChatParticipantRole.Support,
+            _ => ChatParticipantRole.Support
+        };
+
+        await _messageRepository.MarkThreadMessagesAsReadAsync(threadId, counterpartRole, cancellationToken);
+    }
+
+    public async Task<ChatUnreadSummaryDto> GetUnreadSummaryAsync(ChatParticipantRole readerRole, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var counterpartRole = readerRole switch
+        {
+            ChatParticipantRole.Support => ChatParticipantRole.Customer,
+            ChatParticipantRole.Customer => ChatParticipantRole.Support,
+            _ => ChatParticipantRole.Support
+        };
+
+        var summary = await _messageRepository.GetUnreadSummaryAsync(counterpartRole, cancellationToken);
+        return new ChatUnreadSummaryDto(summary.TotalUnread, summary.ThreadsWithUnread);
     }
 }

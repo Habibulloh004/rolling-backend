@@ -2,19 +2,23 @@ using System.Net.WebSockets;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Rolling.Web.Auth;
 
 namespace Rolling.Web.Realtime;
 
 public sealed class AdminChatSocketHandler
 {
     private readonly AdminChatCoordinator _coordinator;
+    private readonly AdminAuthService _authService;
     private readonly ILogger<AdminChatSocketHandler> _logger;
 
     public AdminChatSocketHandler(
         AdminChatCoordinator coordinator,
+        AdminAuthService authService,
         ILogger<AdminChatSocketHandler> logger)
     {
         _coordinator = coordinator;
+        _authService = authService;
         _logger = logger;
     }
 
@@ -24,6 +28,14 @@ public sealed class AdminChatSocketHandler
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync("WebSocket connection is required.");
+            return;
+        }
+
+        var token = ResolveAccessToken(context);
+        if (string.IsNullOrWhiteSpace(token) || _authService.ValidateAccessToken(token) is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsync("Unauthorized.");
             return;
         }
 
@@ -75,5 +87,35 @@ public sealed class AdminChatSocketHandler
                 }
             }
         }
+    }
+
+    private static string? ResolveAccessToken(HttpContext context)
+    {
+        if (context.Request.Query.TryGetValue("token", out var tokenValues))
+        {
+            var value = tokenValues.ToString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        if (context.Request.Query.TryGetValue("accessToken", out var accessTokenValues))
+        {
+            var value = accessTokenValues.ToString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        var authorization = context.Request.Headers.Authorization.ToString();
+        if (string.IsNullOrWhiteSpace(authorization) ||
+            !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return authorization[7..].Trim();
     }
 }

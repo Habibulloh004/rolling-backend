@@ -8,6 +8,7 @@ using Rolling.Application.Notifications.DTOs;
 using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Persistence.Postgres;
+using Rolling.Web.Auth;
 
 namespace Rolling.Web.Controllers;
 
@@ -104,6 +105,21 @@ public sealed class NotificationsController : ControllerBase
         return Ok(new NotificationsListResponse(notifications, totalCount));
     }
 
+    [AdminAuthorize]
+    [HttpGet("/api/admin/notifications")]
+    [ProducesResponseType(typeof(NotificationsListResponse), StatusCodes.Status200OK)]
+    public Task<IActionResult> GetAdminAsync(
+        [FromQuery] string lang = "en",
+        [FromQuery] int take = 20,
+        [FromQuery] int skip = 0,
+        [FromQuery] string? search = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        CancellationToken cancellationToken = default)
+    {
+        return GetAsync(lang, take, skip, search, dateFrom, dateTo, cancellationToken);
+    }
+
     public sealed record NotificationAdminDto(
         int Id,
         string EnTitle,
@@ -119,6 +135,8 @@ public sealed class NotificationsController : ControllerBase
         int TotalCount);
 
     [HttpDelete("{id}")]
+    [AdminAuthorize]
+    [HttpDelete("/api/admin/notifications/{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAsync(int id, CancellationToken cancellationToken = default)
@@ -139,6 +157,8 @@ public sealed class NotificationsController : ControllerBase
     }
 
     [HttpPost]
+    [AdminAuthorize]
+    [HttpPost("/api/admin/notifications")]
     [ProducesResponseType(typeof(CreateNotificationResponse), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateAsync(
         [FromBody] CreateNotificationRequest request,

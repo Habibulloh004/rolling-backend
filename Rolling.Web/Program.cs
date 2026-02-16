@@ -13,6 +13,7 @@ using Rolling.Web.HostedServices;
 using Rolling.Web.Models.Sms;
 using Rolling.Web.Services.Sms;
 using Rolling.Web.Services.Webhooks;
+using Rolling.Web.Auth;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,9 @@ ConfigureKestrelLimits(builder);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllersWithViews();
+builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
+builder.Services.AddScoped<AdminAuthService>();
+builder.Services.AddScoped<AdminAuthorizeFilter>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AdminCors", policy =>
@@ -87,6 +91,9 @@ app.Services.EnsureInfrastructure();
 
 // Run database migrations automatically
 await RunDatabaseMigrationsAsync(app);
+
+// Ensure admin auth seed exists
+await EnsureAdminAuthSeedAsync(app);
 
 // Seed branch configurations from Poster API if database is empty
 await SeedBranchConfigurationsAsync(app);
@@ -205,6 +212,21 @@ static async Task SeedBranchConfigurationsAsync(WebApplication app)
     {
         app.Logger.LogError(ex, "Failed to seed branch configurations");
         // Don't throw - seeding failure shouldn't prevent app startup
+    }
+}
+
+static async Task EnsureAdminAuthSeedAsync(WebApplication app)
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<AdminAuthService>();
+        await authService.EnsureSeedAdminAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Failed to initialize admin auth seed");
+        throw;
     }
 }
 

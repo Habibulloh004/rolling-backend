@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Rolling.Infrastructure.Notifications;
+using Rolling.Web.Auth;
 using Rolling.Web.Models.Notifications;
 
 namespace Rolling.Web.Controllers;
@@ -42,6 +43,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpGet("tokens-get")]
+    [AdminAuthorize]
     public IActionResult GetTokens() =>
         Ok(_tokenStore.GetAll().Select(pair => new
         {
@@ -178,6 +180,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpPost("admin/clean-tokens")]
+    [AdminAuthorize]
     public IActionResult CleanTokens()
     {
         _tokenStore.Cleanup(TimeSpan.FromDays(30));
@@ -185,6 +188,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpPost("send/topic/{language}")]
+    [AdminAuthorize]
     public async Task<IActionResult> SendToTopicAsync(string language, [FromBody] SendTopicRequest request, CancellationToken cancellationToken)
     {
         if (!NotificationService.IsLanguageSupported(language))
@@ -202,6 +206,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpPost("send/all-languages")]
+    [AdminAuthorize]
     public async Task<IActionResult> SendAllLanguagesAsync([FromBody] SendAllLanguagesRequest request, CancellationToken cancellationToken)
     {
         var languages = new[] { "en", "ru", "uz" };
@@ -224,6 +229,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpPost("send/device")]
+    [AdminAuthorize]
     public async Task<IActionResult> SendDeviceAsync([FromBody] SendDeviceRequest request, CancellationToken cancellationToken)
     {
         if (!NotificationService.IsLanguageSupported(request.Language))
@@ -240,6 +246,7 @@ public sealed class PushNotificationsController : ControllerBase
     }
 
     [HttpPost("send/devices")]
+    [AdminAuthorize]
     public async Task<IActionResult> SendDevicesAsync([FromBody] SendDevicesRequest request, CancellationToken cancellationToken)
     {
         if (request.DeviceTokens is null || request.DeviceTokens.Count == 0)

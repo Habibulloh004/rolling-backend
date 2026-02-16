@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Rolling.Web.Auth;
 using Rolling.Web.Diagnostics;
 
 namespace Rolling.Web.Controllers;
 
 [ApiController]
 [Route("api/route-usage")]
+[AdminAuthorize]
 public sealed class RouteUsageController : ControllerBase
 {
     private readonly RouteUsageStore _store;

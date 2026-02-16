@@ -1,19 +1,28 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Rolling.Application.Chat.Commands;
+using Rolling.Application.Chat.Contracts;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
+using Rolling.Web.Auth;
+using Rolling.Web.Utilities;
 
 namespace Rolling.Web.Controllers;
 
 [ApiController]
 [Route("api/admin/orders")]
+[AdminAuthorize]
 public sealed class AdminOrdersController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
+    private readonly IChatService _chatService;
+    private readonly IConfiguration _configuration;
 
-    public AdminOrdersController(AppDbContext dbContext)
+    public AdminOrdersController(AppDbContext dbContext, IChatService chatService, IConfiguration configuration)
     {
         _dbContext = dbContext;
+        _chatService = chatService;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -165,5 +174,67 @@ public sealed class AdminOrdersController : ControllerBase
                 t.IsCurrent
             })
         });
+    }
+
+    [HttpPost("{id}/chat")]
+    public async Task<IActionResult> OpenOrderChatAsync(string id, CancellationToken cancellationToken)
+    {
+        var order = await _dbContext.Orders
+            .AsNoTracking()
+            .Where(item => item.Id == id)
+            .Select(item => new
+            {
+                item.Id,
+                item.OrderNumber,
+                item.UserId,
+                item.FirstName,
+                item.LastName,
+                item.Status
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (order is null)
+        {
+            return NotFound(new { error = "Order not found" });
+        }
+
+        var tenantId = ResolveTenantId();
+        var orderId = DeterministicGuid.From(order.Id);
+        var customerSource = string.IsNullOrWhiteSpace(order.UserId) ? order.Id : order.UserId;
+        var customerId = DeterministicGuid.From(customerSource!);
+        var customerUserId = customerId;
+        var customerDisplayName = $"{order.FirstName} {order.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(customerDisplayName))
+        {
+            customerDisplayName = "Customer";
+        }
+
+        var command = new OpenChatThreadCommand(
+            tenantId,
+            orderId,
+            customerId,
+            customerUserId,
+            customerDisplayName);
+
+        var thread = await _chatService.OpenThreadAsync(command, cancellationToken);
+        return Ok(new
+        {
+            thread.Id,
+            OrderId = order.Id,
+            order.OrderNumber,
+            OrderStatus = (int)order.Status
+        });
+    }
+
+    private Guid ResolveTenantId()
+    {
+        var configured = _configuration["ROLLING_TENANT_ID"] ?? _configuration["Rolling:TenantId"];
+        if (Guid.TryParse(configured, out var tenantId))
+        {
+            return tenantId;
+        }
+
+        var brand = _configuration["BRAND_NAME"] ?? _configuration["Brand:Name"] ?? "Rolling Sushi";
+        return DeterministicGuid.From(brand);
     }
 }

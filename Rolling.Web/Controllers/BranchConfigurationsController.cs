@@ -6,6 +6,7 @@ using Rolling.Infrastructure.Cache;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Persistence.Redis;
+using Rolling.Web.Auth;
 using Rolling.Web.Models.BranchConfigs;
 
 namespace Rolling.Web.Controllers;
@@ -186,6 +187,7 @@ public sealed class BranchConfigurationsController : ControllerBase
     /// <summary>
     /// Create a new branch configuration
     /// </summary>
+    [AdminAuthorize]
     [HttpPost]
     public async Task<IActionResult> CreateBranchConfigurationAsync(
         [FromBody] CreateBranchConfigurationRequest request,
@@ -243,6 +245,7 @@ public sealed class BranchConfigurationsController : ControllerBase
     /// <summary>
     /// Update an existing branch configuration
     /// </summary>
+    [AdminAuthorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateBranchConfigurationAsync(
         int id,
@@ -352,6 +355,7 @@ public sealed class BranchConfigurationsController : ControllerBase
     /// <summary>
     /// Delete a branch configuration (soft delete by setting IsActive to false)
     /// </summary>
+    [AdminAuthorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBranchConfigurationAsync(int id, CancellationToken cancellationToken)
     {

@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Infrastructure.Persistence.Postgres;
+using Rolling.Web.Auth;
 
 namespace Rolling.Web.Controllers;
 
 [ApiController]
 [Route("api/users")]
+[AdminAuthorize]
 public sealed class UsersController : ControllerBase
 {
     private readonly AppDbContext _dbContext;

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Infrastructure.Persistence.Postgres;
+using Rolling.Web.Auth;
 
 namespace Rolling.Web.Controllers;
 
@@ -44,6 +45,13 @@ public sealed class TransactionsController : ControllerBase
             .ToListAsync(cancellationToken);
 
         return Ok(items);
+    }
+
+    [AdminAuthorize]
+    [HttpGet("/api/admin/transaction")]
+    public Task<IActionResult> ListAdminAsync([FromQuery] int take = 100, CancellationToken cancellationToken = default)
+    {
+        return ListAsync(take, cancellationToken);
     }
 
     [HttpGet("{id}")]
@@ -89,5 +97,12 @@ public sealed class TransactionsController : ControllerBase
             transaction.CreatedAt,
             transaction.UpdatedAt
         });
+    }
+
+    [AdminAuthorize]
+    [HttpGet("/api/admin/transaction/{id}")]
+    public Task<IActionResult> GetAdminAsync(string id, CancellationToken cancellationToken)
+    {
+        return GetAsync(id, cancellationToken);
     }
 }
