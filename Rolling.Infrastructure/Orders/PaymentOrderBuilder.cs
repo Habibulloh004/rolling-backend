@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -62,12 +63,19 @@ internal static class PaymentOrderBuilder
                 existing.PosterTransactionId = posterTransactionId;
             }
 
-            var canonicalNumber = posterTransactionId ?? posterIncomingOrderId;
+            var canonicalNumber = ResolveOrderDisplayNumber(
+                posterIncomingOrderId,
+                posterTransactionId,
+                existing.PosterIncomingOrderId,
+                existing.PosterTransactionId,
+                transaction.Id);
             if (!string.IsNullOrWhiteSpace(canonicalNumber) &&
-                (string.IsNullOrWhiteSpace(existing.OrderNumber) || existing.OrderNumber == transaction.Id))
+                (string.IsNullOrWhiteSpace(existing.OrderNumber) || NeedsOrderNumberUpgrade(existing.OrderNumber, transaction.Id)))
             {
                 existing.OrderNumber = canonicalNumber;
             }
+
+            await BackfillItemsIfMissingAsync(dbContext, existing.Id, orderDetails, cancellationToken);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -95,7 +103,7 @@ internal static class PaymentOrderBuilder
         var order = new Order
         {
             Id = Guid.NewGuid().ToString(),
-            OrderNumber = posterTransactionId ?? posterIncomingOrderId ?? transaction.Id,
+            OrderNumber = ResolveOrderDisplayNumber(posterIncomingOrderId, posterTransactionId, null, null, transaction.Id),
             Date = now,
             Subtotal = snapshot.Subtotal,
             DeliveryFee = snapshot.DeliveryFee,
@@ -214,46 +222,110 @@ internal static class PaymentOrderBuilder
             yield break;
         }
 
-        if (!orderDetails.Value.TryGetProperty("products", out var products) ||
-            products.ValueKind != JsonValueKind.Array)
+        if (!TryGetProductsArray(orderDetails.Value, out var products))
         {
             yield break;
         }
 
         foreach (var product in products.EnumerateArray())
         {
-            var productId = GetString(product, "product_id", "productId");
+            var productId = GetString(product, "product_id", "productId", "menu_item_id", "menuItemId", "id");
             if (string.IsNullOrWhiteSpace(productId))
             {
                 continue;
             }
 
-            var count = GetInt(product, "count") ?? 0;
+            var count = GetInt(product, "count", "quantity", "qty", "amount") ?? 0;
             if (count <= 0)
             {
                 continue;
             }
 
             var priceOverride = GetDecimal(product, "price_override", "priceOverride");
+            var unitPriceFromPayload = GetDecimal(product, "price", "unit_price", "unitPrice");
+            var totalPriceFromPayload = GetDecimal(product, "total_price", "totalPrice");
             var isGift = GetBool(product, "is_gift", "isGift");
             var modifierId = GetString(product, "modificator_id", "modificatorId");
+            var name = GetString(product, "name", "product_name", "productName", "title");
 
-            var unitPrice = priceOverride ?? 0m;
+            var unitPrice = priceOverride ??
+                            unitPriceFromPayload ??
+                            (totalPriceFromPayload.HasValue && count > 0
+                                ? Math.Round(totalPriceFromPayload.Value / count, 2, MidpointRounding.AwayFromZero)
+                                : 0m);
+            var totalPrice = totalPriceFromPayload ?? (unitPrice * count);
 
             yield return new OrderItem
             {
                 Id = Guid.NewGuid().ToString(),
                 OrderId = orderId,
                 MenuItemId = productId,
-                Name = string.Empty,
+                Name = string.IsNullOrWhiteSpace(name) ? productId : name,
                 Quantity = count,
                 Price = unitPrice,
-                TotalPrice = unitPrice * count,
+                TotalPrice = totalPrice,
                 ModifierId = modifierId,
                 IsBonus = isGift,
-                PriceOverride = priceOverride
+                PriceOverride = priceOverride,
+                ImageUrl = GetString(product, "image_url", "imageUrl")
             };
         }
+    }
+
+    private static async Task BackfillItemsIfMissingAsync(
+        AppDbContext dbContext,
+        string orderId,
+        JsonElement? orderDetails,
+        CancellationToken cancellationToken)
+    {
+        if (!orderDetails.HasValue || orderDetails.Value.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var hasItems = await dbContext.OrderItems
+            .AsNoTracking()
+            .AnyAsync(item => item.OrderId == orderId, cancellationToken);
+
+        if (hasItems)
+        {
+            return;
+        }
+
+        var parsedItems = BuildItems(orderId, orderDetails).ToList();
+        if (parsedItems.Count == 0)
+        {
+            return;
+        }
+
+        await dbContext.OrderItems.AddRangeAsync(parsedItems, cancellationToken);
+    }
+
+    private static bool TryGetProductsArray(JsonElement root, out JsonElement products)
+    {
+        products = default;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if ((root.TryGetProperty("products", out products) ||
+             root.TryGetProperty("items", out products) ||
+             root.TryGetProperty("order_items", out products) ||
+             root.TryGetProperty("orderItems", out products)) &&
+            products.ValueKind == JsonValueKind.Array)
+        {
+            return true;
+        }
+
+        if ((root.TryGetProperty("orderDetails", out var nestedDetails) ||
+             root.TryGetProperty("order_details", out nestedDetails)) &&
+            nestedDetails.ValueKind == JsonValueKind.Object)
+        {
+            return TryGetProductsArray(nestedDetails, out products);
+        }
+
+        return false;
     }
 
     private static string ResolvePaymentMethod(string? paymentMethodId, string provider)
@@ -381,10 +453,87 @@ internal static class PaymentOrderBuilder
                 return numeric;
             }
 
-            if (element.ValueKind == JsonValueKind.String &&
-                int.TryParse(element.GetString(), out var parsed))
+            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var fractional))
             {
-                return parsed;
+                return (int)Math.Round(fractional, MidpointRounding.AwayFromZero);
+            }
+
+            if (element.ValueKind == JsonValueKind.String &&
+                int.TryParse(element.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
+            {
+                return parsedInt;
+            }
+
+            if (element.ValueKind == JsonValueKind.String &&
+                double.TryParse(element.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedDouble))
+            {
+                return (int)Math.Round(parsedDouble, MidpointRounding.AwayFromZero);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool NeedsOrderNumberUpgrade(string? orderNumber, string transactionId)
+    {
+        if (string.IsNullOrWhiteSpace(orderNumber))
+        {
+            return true;
+        }
+
+        if (string.Equals(orderNumber, transactionId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return IsBackendTransactionIdLike(orderNumber);
+    }
+
+    private static bool IsBackendTransactionIdLike(string value)
+    {
+        if (value.Length != 24)
+        {
+            return false;
+        }
+
+        foreach (var ch in value)
+        {
+            if (!IsHexCharacter(ch))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsHexCharacter(char ch) =>
+        (ch >= '0' && ch <= '9') ||
+        (ch >= 'a' && ch <= 'f') ||
+        (ch >= 'A' && ch <= 'F');
+
+    private static string ResolveOrderDisplayNumber(
+        string? posterIncomingOrderId,
+        string? posterTransactionId,
+        string? existingPosterIncomingOrderId,
+        string? existingPosterTransactionId,
+        string fallback)
+    {
+        return FirstNonEmpty(
+                   posterIncomingOrderId,
+                   posterTransactionId,
+                   existingPosterIncomingOrderId,
+                   existingPosterTransactionId)
+               ?? fallback;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
             }
         }
 

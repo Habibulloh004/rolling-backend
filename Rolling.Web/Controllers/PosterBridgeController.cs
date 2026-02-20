@@ -16,9 +16,14 @@ namespace Rolling.Web.Controllers;
 [Route("")]
 public sealed class PosterBridgeController : ControllerBase
 {
+    private const int ServiceModeDineIn = 1;
+    private const int ServiceModeTakeaway = 2;
+    private const int ServiceModeDelivery = 3;
+
     private readonly PosterService _posterService;
     private readonly AppDbContext _dbContext;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly NotificationTokenStore _tokenStore;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<PosterBridgeController> _logger;
@@ -27,6 +32,7 @@ public sealed class PosterBridgeController : ControllerBase
         PosterService posterService,
         AppDbContext dbContext,
         ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
         NotificationTokenStore tokenStore,
         IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<PosterBridgeController> logger)
@@ -34,6 +40,7 @@ public sealed class PosterBridgeController : ControllerBase
         _posterService = posterService;
         _dbContext = dbContext;
         _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
         _tokenStore = tokenStore;
         _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
@@ -115,14 +122,49 @@ public sealed class PosterBridgeController : ControllerBase
     [HttpPost("api/posttoposter")]
     public async Task<IActionResult> PostToPosterAsync([FromBody] CreateOrderRequest request, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.SpotId))
+        {
+            return BadRequest(new { error = "spotId is required" });
+        }
+
+        if (request.Products.Count == 0)
+        {
+            return BadRequest(new { error = "products must contain at least one item" });
+        }
+
+        var normalizedServiceMode = request.ServiceMode switch
+        {
+            ServiceModeDineIn => ServiceModeDineIn,
+            ServiceModeTakeaway => ServiceModeTakeaway,
+            ServiceModeDelivery => ServiceModeDelivery,
+            _ => 0
+        };
+
+        if (normalizedServiceMode == 0)
+        {
+            return BadRequest(new { error = "serviceMode must be 1 (dine-in), 2 (takeaway), or 3 (delivery)" });
+        }
+
+        var isDeliveryMode = normalizedServiceMode == ServiceModeDelivery;
+        var normalizedAddress = isDeliveryMode
+            ? TrimToMaxLengthOrNull(request.Address, 250)
+            : null;
+        var normalizedDeliveryPrice = isDeliveryMode ? Math.Max(request.DeliveryPrice, 0m) : 0m;
+
+        if (isDeliveryMode && string.IsNullOrWhiteSpace(normalizedAddress))
+        {
+            return BadRequest(new { error = "address is required for delivery orders (serviceMode=3)" });
+        }
+
         // Log incoming request
         _logger.LogInformation("=== INCOMING ORDER REQUEST ===");
         _logger.LogInformation("SpotId: {SpotId}", request.SpotId);
+        _logger.LogInformation("ServiceMode: {ServiceMode}", normalizedServiceMode);
         _logger.LogInformation("Phone: {Phone}", request.Phone);
         _logger.LogInformation("FirstName: {FirstName}", request.FirstName);
         _logger.LogInformation("LastName: {LastName}", request.LastName);
-        _logger.LogInformation("Address: {Address}", request.Address);
-        _logger.LogInformation("DeliveryPrice: {DeliveryPrice}", request.DeliveryPrice);
+        _logger.LogInformation("Address: {Address}", normalizedAddress);
+        _logger.LogInformation("DeliveryPrice: {DeliveryPrice}", normalizedDeliveryPrice);
         _logger.LogInformation("PaymentMethodId: {PaymentMethodId}", request.PaymentMethodId);
         _logger.LogInformation("FcmToken: {FcmToken}", request.FcmToken);
         _logger.LogInformation("Products count: {Count}", request.Products.Count);
@@ -149,12 +191,12 @@ public sealed class PosterBridgeController : ControllerBase
             ["alternate_phone"] = sanitizedAlternatePhone,
             ["first_name"] = string.IsNullOrWhiteSpace(request.FirstName) ? null : request.FirstName.Trim()[..Math.Min(60, request.FirstName.Trim().Length)],
             ["last_name"] = string.IsNullOrWhiteSpace(request.LastName) ? null : request.LastName.Trim()[..Math.Min(60, request.LastName.Trim().Length)],
-            ["address"] = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim()[..Math.Min(250, request.Address.Trim().Length)],
+            ["address"] = normalizedAddress,
             ["comment"] = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim(),
             // Poster expects delivery_price in minor units (x100), same as iOS implementation.
-            ["delivery_price"] = request.DeliveryPrice > 0m ? (long)Math.Round(request.DeliveryPrice * 100m) : null,
+            ["delivery_price"] = normalizedDeliveryPrice > 0m ? (long)Math.Round(normalizedDeliveryPrice * 100m) : null,
             ["payment_method_id"] = string.IsNullOrWhiteSpace(request.PaymentMethodId) ? null : request.PaymentMethodId,
-            ["service_mode"] = request.ServiceMode,
+            ["service_mode"] = normalizedServiceMode,
             ["products"] = request.Products.Select(p => new Dictionary<string, object?>
             {
                 ["product_id"] = p.ProductId,
@@ -341,11 +383,11 @@ public sealed class PosterBridgeController : ControllerBase
             OrderNumber = orderNumber,
             Date = now,
             Subtotal = request.Subtotal,
-            DeliveryFee = request.DeliveryPrice,
+            DeliveryFee = normalizedDeliveryPrice,
             Discount = request.Discount,
             Total = request.Total,
             Status = request.PaymentMethodId == "2" ? OrderStatus.AwaitingPayment : OrderStatus.Pending,
-            DeliveryAddress = request.Address ?? string.Empty,
+            DeliveryAddress = normalizedAddress ?? string.Empty,
             DeliveryLatitude = request.DeliveryLatitude,
             DeliveryLongitude = request.DeliveryLongitude,
             DeliveryAddressComment = request.DeliveryAddressComment,
@@ -364,12 +406,12 @@ public sealed class PosterBridgeController : ControllerBase
             PosterSpotId = request.SpotId,
             PosterIncomingOrderId = incomingOrderId,
             PosterTransactionId = transactionId,
-            Phone = request.Phone,
-            AlternatePhone = request.AlternatePhone,
+            Phone = sanitizedPhone,
+            AlternatePhone = sanitizedAlternatePhone,
             FirstName = request.FirstName,
             LastName = request.LastName,
             Comment = request.Comment,
-            ServiceMode = request.ServiceMode,
+            ServiceMode = normalizedServiceMode,
             PromoCode = request.PromoCode,
             PromoDiscountAmount = request.PromoDiscountAmount,
             PromoDiscountPercentage = request.PromoDiscountPercentage,
@@ -640,6 +682,17 @@ public sealed class PosterBridgeController : ControllerBase
         return normalized;
     }
 
+    private static string? TrimToMaxLengthOrNull(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
     /// <summary>
     /// Mock endpoint for creating orders without calling Poster API.
     /// Saves order to backend database only with fake Poster IDs.
@@ -651,7 +704,46 @@ public sealed class PosterBridgeController : ControllerBase
         _logger.LogInformation("SpotId: {SpotId}, Phone: {Phone}, Products: {Count}",
             request.SpotId, request.Phone, request.Products.Count);
 
+        if (string.IsNullOrWhiteSpace(request.SpotId))
+        {
+            return BadRequest(new { error = "spotId is required" });
+        }
+
+        if (request.Products.Count == 0)
+        {
+            return BadRequest(new { error = "products must contain at least one item" });
+        }
+
+        var normalizedServiceMode = request.ServiceMode switch
+        {
+            ServiceModeDineIn => ServiceModeDineIn,
+            ServiceModeTakeaway => ServiceModeTakeaway,
+            ServiceModeDelivery => ServiceModeDelivery,
+            _ => 0
+        };
+
+        if (normalizedServiceMode == 0)
+        {
+            return BadRequest(new { error = "serviceMode must be 1 (dine-in), 2 (takeaway), or 3 (delivery)" });
+        }
+
+        var isDeliveryMode = normalizedServiceMode == ServiceModeDelivery;
+        var normalizedAddress = isDeliveryMode
+            ? TrimToMaxLengthOrNull(request.Address, 250)
+            : null;
+        var normalizedDeliveryPrice = isDeliveryMode ? Math.Max(request.DeliveryPrice, 0m) : 0m;
+
+        if (isDeliveryMode && string.IsNullOrWhiteSpace(normalizedAddress))
+        {
+            return BadRequest(new { error = "address is required for delivery orders (serviceMode=3)" });
+        }
+
         UpdateTokenLanguageFromRequest(request);
+
+        var sanitizedPhone = SanitizePosterPhoneNumber(request.Phone);
+        var sanitizedAlternatePhone = string.IsNullOrWhiteSpace(request.AlternatePhone)
+            ? null
+            : SanitizePosterPhoneNumber(request.AlternatePhone);
 
         // Generate fake Poster IDs
         var random = new Random();
@@ -669,11 +761,11 @@ public sealed class PosterBridgeController : ControllerBase
             OrderNumber = orderNumber,
             Date = now,
             Subtotal = request.Subtotal,
-            DeliveryFee = request.DeliveryPrice,
+            DeliveryFee = normalizedDeliveryPrice,
             Discount = request.Discount,
             Total = request.Total,
             Status = request.PaymentMethodId == "2" ? OrderStatus.AwaitingPayment : OrderStatus.Pending,
-            DeliveryAddress = request.Address ?? string.Empty,
+            DeliveryAddress = normalizedAddress ?? string.Empty,
             DeliveryLatitude = request.DeliveryLatitude,
             DeliveryLongitude = request.DeliveryLongitude,
             DeliveryAddressComment = request.DeliveryAddressComment,
@@ -692,12 +784,12 @@ public sealed class PosterBridgeController : ControllerBase
             PosterSpotId = request.SpotId,
             PosterIncomingOrderId = fakeIncomingOrderId,
             PosterTransactionId = fakeTransactionId,
-            Phone = request.Phone,
-            AlternatePhone = request.AlternatePhone,
+            Phone = sanitizedPhone,
+            AlternatePhone = sanitizedAlternatePhone,
             FirstName = request.FirstName,
             LastName = request.LastName,
             Comment = request.Comment,
-            ServiceMode = request.ServiceMode,
+            ServiceMode = normalizedServiceMode,
             PromoCode = request.PromoCode,
             PromoDiscountAmount = request.PromoDiscountAmount,
             PromoDiscountPercentage = request.PromoDiscountPercentage,
@@ -824,6 +916,8 @@ public sealed class PosterBridgeController : ControllerBase
 
     private void TrackOrderForPolling(Order order, string? fcmTokenOverride = null)
     {
+        UpdateTakeawayTracker(order);
+
         if (!ShouldTrackOrder(order.Status))
         {
             return;
@@ -841,8 +935,25 @@ public sealed class PosterBridgeController : ControllerBase
             FcmToken = fcmToken,
             Phone = order.Phone,
             CurrentStatus = order.Status,
+            ServiceMode = order.ServiceMode,
             Language = language
         });
+    }
+
+    private void UpdateTakeawayTracker(Order order)
+    {
+        if (order.ServiceMode != ServiceModeTakeaway)
+        {
+            return;
+        }
+
+        if (ShouldTrackOrder(order.Status))
+        {
+            _takeawayOrderTracker.TrackOrder(order);
+            return;
+        }
+
+        _takeawayOrderTracker.UntrackOrder(order.Id);
     }
 
     private string ResolveLanguage(string? fcmToken)

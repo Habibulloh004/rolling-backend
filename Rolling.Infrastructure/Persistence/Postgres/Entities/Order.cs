@@ -138,6 +138,13 @@ public sealed class Order
     // Service Mode (1 = dine-in, 2 = pickup, 3 = delivery)
     public int ServiceMode { get; set; } = 3;
 
+    // Takeaway automation timestamps (for restart-safe virtual statuses)
+    public DateTime? TakeawayAcceptedAt { get; set; }
+
+    public DateTime? TakeawayPreparingAt { get; set; }
+
+    public DateTime? TakeawayReadyForPickupAt { get; set; }
+
     // Promo Code
     public string? PromoCode { get; set; }
 

@@ -101,6 +101,31 @@ public sealed class ActiveOrderTracker
     }
 
     /// <summary>
+    /// Update notification language for a tracked active order.
+    /// </summary>
+    public bool UpdateOrderLanguage(string orderId, string language)
+    {
+        if (!_activeOrders.TryGetValue(orderId, out var order))
+        {
+            return false;
+        }
+
+        var normalizedLanguage = language.Trim().ToLowerInvariant();
+        var updated = order with
+        {
+            Language = normalizedLanguage
+        };
+        _activeOrders[orderId] = updated;
+
+        _logger.LogInformation(
+            "Updated tracked order {OrderId} language to {Language}",
+            orderId,
+            normalizedLanguage);
+
+        return true;
+    }
+
+    /// <summary>
     /// Record the first poll result without triggering notification.
     /// Sets LastPosterStatus as the baseline for future comparisons.
     /// </summary>
@@ -186,6 +211,11 @@ public sealed record TrackedOrder
     /// Current known status of the order (from our database).
     /// </summary>
     public OrderStatus CurrentStatus { get; init; } = OrderStatus.Pending;
+
+    /// <summary>
+    /// Service mode (2 = pickup, 3 = delivery).
+    /// </summary>
+    public int ServiceMode { get; init; } = 3;
 
     /// <summary>
     /// Last status received from Poster API.

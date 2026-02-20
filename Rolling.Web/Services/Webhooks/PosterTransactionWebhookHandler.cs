@@ -10,11 +10,14 @@ namespace Rolling.Web.Services.Webhooks;
 
 public sealed class PosterTransactionWebhookHandler
 {
+    private const int TakeawayServiceMode = 2;
+
     private readonly AppDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
     private readonly NotificationService _notificationService;
     private readonly NotificationTokenStore _tokenStore;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly TelegramService _telegramService;
     private readonly ILogger<PosterTransactionWebhookHandler> _logger;
@@ -25,6 +28,7 @@ public sealed class PosterTransactionWebhookHandler
         NotificationService notificationService,
         NotificationTokenStore tokenStore,
         ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
         IOrderUpdatesPublisher orderUpdatesPublisher,
         TelegramService telegramService,
         ILogger<PosterTransactionWebhookHandler> logger)
@@ -34,6 +38,7 @@ public sealed class PosterTransactionWebhookHandler
         _notificationService = notificationService;
         _tokenStore = tokenStore;
         _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
         _orderUpdatesPublisher = orderUpdatesPublisher;
         _telegramService = telegramService;
         _logger = logger;
@@ -89,6 +94,7 @@ public sealed class PosterTransactionWebhookHandler
 
         order.Status = mergedStatus;
         order.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        EnsureTakeawayAutomationMetadata(order, order.UpdatedAt);
         if (mergedStatus == OrderStatus.Delivered && order.ActualDeliveryTime is null)
         {
             order.ActualDeliveryTime = _timeProvider.GetUtcNow().UtcDateTime;
@@ -136,7 +142,7 @@ public sealed class PosterTransactionWebhookHandler
             order.Id, mergedStatus, tokenPreview);
 
         var language = ResolveLanguage(order.FcmToken);
-        var payloadMessage = BuildNotificationPayload(mergedStatus, language, order.OrderNumber);
+        var payloadMessage = BuildNotificationPayload(mergedStatus, language, order.OrderNumber, order.ServiceMode);
 
         // Use string status for iOS app compatibility (matches fromBackendValue parsing)
         var statusString = mergedStatus switch
@@ -276,6 +282,8 @@ public sealed class PosterTransactionWebhookHandler
 
     private void UpdateTrackedOrder(Order order, OrderStatus status)
     {
+        UpdateTakeawayTracker(order, status);
+
         if (_orderTracker.IsTracked(order.Id))
         {
             _orderTracker.UpdateOrderStatus(order.Id, status);
@@ -300,10 +308,27 @@ public sealed class PosterTransactionWebhookHandler
             FcmToken = order.FcmToken,
             Phone = order.Phone,
             CurrentStatus = status,
+            ServiceMode = order.ServiceMode,
             LastPosterStatus = status,
             LastCheckedAt = _timeProvider.GetUtcNow().UtcDateTime,
             Language = ResolveLanguage(order.FcmToken)
         });
+    }
+
+    private void UpdateTakeawayTracker(Order order, OrderStatus status)
+    {
+        if (order.ServiceMode != TakeawayServiceMode)
+        {
+            return;
+        }
+
+        if (IsTerminalStatus(status))
+        {
+            _takeawayOrderTracker.UntrackOrder(order.Id);
+            return;
+        }
+
+        _takeawayOrderTracker.TrackOrder(order);
     }
 
     private static bool IsTerminalStatus(OrderStatus status) =>
@@ -325,10 +350,11 @@ public sealed class PosterTransactionWebhookHandler
     private static NotificationPayload BuildNotificationPayload(
         OrderStatus status,
         string language,
-        string? orderNumber)
+        string? orderNumber,
+        int serviceMode)
     {
         var title = BuildOrderTitle(orderNumber);
-        var body = BuildStatusMessage(status, language);
+        var body = BuildStatusMessage(status, language, serviceMode);
         return new NotificationPayload(title, body);
     }
 
@@ -344,8 +370,9 @@ public sealed class PosterTransactionWebhookHandler
             : $"#{orderNumber}";
     }
 
-    private static string BuildStatusMessage(OrderStatus status, string language)
+    private static string BuildStatusMessage(OrderStatus status, string language, int serviceMode)
     {
+        var isTakeaway = serviceMode == TakeawayServiceMode;
         return (status, language) switch
         {
             (OrderStatus.AwaitingPayment, "ru") => "Ожидаем оплату заказа",
@@ -364,9 +391,17 @@ public sealed class PosterTransactionWebhookHandler
             (OrderStatus.Preparing, "uz") => "Oshpazlarimiz sushini tayyorlamoqda",
             (OrderStatus.Preparing, _) => "Chefs are rolling your sushi",
 
+            (OrderStatus.OnTheWay, "ru") when isTakeaway => "Заказ готов к самовывозу",
+            (OrderStatus.OnTheWay, "uz") when isTakeaway => "Buyurtmangiz olib ketish uchun tayyor",
+            (OrderStatus.OnTheWay, _) when isTakeaway => "Your order is ready for pickup",
+
             (OrderStatus.OnTheWay, "ru") => "Курьер уже в пути",
             (OrderStatus.OnTheWay, "uz") => "Kuryer yo'lda",
             (OrderStatus.OnTheWay, _) => "Courier is on the way",
+
+            (OrderStatus.Delivered, "ru") when isTakeaway => "Заказ успешно забран",
+            (OrderStatus.Delivered, "uz") when isTakeaway => "Buyurtma muvaffaqiyatli olib ketildi",
+            (OrderStatus.Delivered, _) when isTakeaway => "Order picked up successfully",
 
             (OrderStatus.Delivered, "ru") => "Заказ доставлен. Приятного аппетита!",
             (OrderStatus.Delivered, "uz") => "Buyurtma yetkazildi. Yoqimli ishtaha!",
@@ -378,6 +413,33 @@ public sealed class PosterTransactionWebhookHandler
 
             _ => "Order updated"
         };
+    }
+
+    private static void EnsureTakeawayAutomationMetadata(Order order, DateTime now)
+    {
+        if (order.ServiceMode != TakeawayServiceMode)
+        {
+            return;
+        }
+
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Pending or OrderStatus.AwaitingPayment)
+        {
+            return;
+        }
+
+        var baselineTime = order.UpdatedAt == default ? now : order.UpdatedAt;
+
+        order.TakeawayAcceptedAt ??= baselineTime;
+
+        if (order.Status is OrderStatus.Preparing or OrderStatus.OnTheWay)
+        {
+            order.TakeawayPreparingAt ??= baselineTime;
+        }
+
+        if (order.Status == OrderStatus.OnTheWay)
+        {
+            order.TakeawayReadyForPickupAt ??= baselineTime;
+        }
     }
 
     private static string? NormalizeOrderIdentifier(string value)

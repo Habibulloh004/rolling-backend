@@ -39,6 +39,8 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<BranchConfiguration> BranchConfigurations => Set<BranchConfiguration>();
 
+    public DbSet<TakeawayAutomationSettings> TakeawayAutomationSettings => Set<TakeawayAutomationSettings>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<PaymentTransaction>(entity =>
@@ -126,6 +128,9 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.CourierLongitude).HasColumnName("courier_longitude");
             entity.Property(e => e.CourierLocationLastUpdated).HasColumnName("courier_location_last_updated");
             entity.Property(e => e.ServiceMode).HasColumnName("service_mode");
+            entity.Property(e => e.TakeawayAcceptedAt).HasColumnName("takeaway_accepted_at");
+            entity.Property(e => e.TakeawayPreparingAt).HasColumnName("takeaway_preparing_at");
+            entity.Property(e => e.TakeawayReadyForPickupAt).HasColumnName("takeaway_ready_for_pickup_at");
             entity.Property(e => e.PromoCode).HasColumnName("promo_code");
             entity.Property(e => e.PromoDiscountAmount).HasColumnName("promo_discount_amount");
             entity.Property(e => e.PromoDiscountPercentage).HasColumnName("promo_discount_percentage");
@@ -380,6 +385,16 @@ public sealed class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(e => e.SpotId).IsUnique();
+        });
+
+        modelBuilder.Entity<TakeawayAutomationSettings>(entity =>
+        {
+            entity.ToTable("takeaway_automation_settings");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.PreparingDelaySeconds).HasColumnName("preparing_delay_seconds");
+            entity.Property(e => e.ReadyForPickupDelaySeconds).HasColumnName("ready_for_pickup_delay_seconds");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
     }
 }

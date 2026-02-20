@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Chat.Commands;
@@ -46,6 +48,8 @@ public sealed class AdminOrdersController : ControllerBase
             query = query.Where(o =>
                 o.Id.ToLower().Contains(searchLower) ||
                 o.OrderNumber.ToLower().Contains(searchLower) ||
+                (o.PosterIncomingOrderId != null && o.PosterIncomingOrderId.ToLower().Contains(searchLower)) ||
+                (o.PosterTransactionId != null && o.PosterTransactionId.ToLower().Contains(searchLower)) ||
                 (o.FirstName != null && o.FirstName.ToLower().Contains(searchLower)) ||
                 (o.LastName != null && o.LastName.ToLower().Contains(searchLower)) ||
                 o.Phone.ToLower().Contains(searchLower));
@@ -80,7 +84,7 @@ public sealed class AdminOrdersController : ControllerBase
             .Select(o => new
             {
                 o.Id,
-                o.OrderNumber,
+                OrderNumber = o.PosterIncomingOrderId ?? o.PosterTransactionId ?? o.OrderNumber,
                 o.Date,
                 o.Subtotal,
                 o.DeliveryFee,
@@ -118,10 +122,20 @@ public sealed class AdminOrdersController : ControllerBase
             return NotFound(new { error = "Order not found" });
         }
 
+        var items = order.Items.Select(MapOrderItem).ToList();
+        if (items.Count == 0 && !string.IsNullOrWhiteSpace(order.PaymentTransactionId))
+        {
+            var fallbackItems = await BuildFallbackItemsFromTransactionAsync(order.PaymentTransactionId, cancellationToken);
+            if (fallbackItems.Count > 0)
+            {
+                items = fallbackItems;
+            }
+        }
+
         return Ok(new
         {
             order.Id,
-            order.OrderNumber,
+            OrderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber),
             order.Date,
             order.Subtotal,
             order.DeliveryFee,
@@ -144,6 +158,8 @@ public sealed class AdminOrdersController : ControllerBase
             order.BranchAddress,
             order.BranchPhone,
             order.ServiceMode,
+            order.PosterIncomingOrderId,
+            order.PosterTransactionId,
             order.PromoCode,
             order.PromoDiscountAmount,
             order.EstimatedDeliveryTime,
@@ -154,17 +170,7 @@ public sealed class AdminOrdersController : ControllerBase
             order.CourierPhone,
             order.CreatedAt,
             order.UpdatedAt,
-            Items = order.Items.Select(i => new
-            {
-                i.Id,
-                i.MenuItemId,
-                i.Name,
-                i.Quantity,
-                i.Price,
-                i.TotalPrice,
-                i.Modifiers,
-                i.ImageUrl
-            }),
+            Items = items,
             Timeline = order.Timeline.OrderBy(t => t.SortOrder).Select(t => new
             {
                 t.Id,
@@ -186,6 +192,8 @@ public sealed class AdminOrdersController : ControllerBase
             {
                 item.Id,
                 item.OrderNumber,
+                item.PosterIncomingOrderId,
+                item.PosterTransactionId,
                 item.UserId,
                 item.FirstName,
                 item.LastName,
@@ -221,10 +229,229 @@ public sealed class AdminOrdersController : ControllerBase
         {
             thread.Id,
             OrderId = order.Id,
-            order.OrderNumber,
+            OrderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber),
             OrderStatus = (int)order.Status
         });
     }
+
+    private static string ResolveDisplayOrderNumber(string? posterIncomingOrderId, string? posterTransactionId, string orderNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
+        {
+            return posterIncomingOrderId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posterTransactionId))
+        {
+            return posterTransactionId;
+        }
+
+        return orderNumber;
+    }
+
+    private AdminOrderItemDto MapOrderItem(OrderItem item)
+    {
+        return new AdminOrderItemDto(
+            item.Id,
+            item.MenuItemId,
+            string.IsNullOrWhiteSpace(item.Name) ? item.MenuItemId : item.Name,
+            item.Quantity,
+            item.Price,
+            item.TotalPrice,
+            item.Modifiers,
+            item.ImageUrl);
+    }
+
+    private async Task<List<AdminOrderItemDto>> BuildFallbackItemsFromTransactionAsync(
+        string paymentTransactionId,
+        CancellationToken cancellationToken)
+    {
+        var orderDetailsJson = await _dbContext.Transactions
+            .AsNoTracking()
+            .Where(transaction => transaction.Id == paymentTransactionId)
+            .Select(transaction => transaction.OrderDetailsJson)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(orderDetailsJson))
+        {
+            return new List<AdminOrderItemDto>();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(orderDetailsJson);
+            if (!TryExtractProductsArray(document.RootElement, out var products))
+            {
+                return new List<AdminOrderItemDto>();
+            }
+
+            var items = new List<AdminOrderItemDto>();
+            foreach (var product in products.EnumerateArray())
+            {
+                var menuItemId = ReadString(product, "product_id", "productId", "menu_item_id", "menuItemId", "id");
+                if (string.IsNullOrWhiteSpace(menuItemId))
+                {
+                    continue;
+                }
+
+                var quantity = ReadInt(product, "count", "quantity", "qty", "amount") ?? 1;
+                if (quantity <= 0)
+                {
+                    continue;
+                }
+
+                var priceOverride = ReadDecimal(product, "price_override", "priceOverride");
+                var unitPriceRaw = ReadDecimal(product, "price", "unit_price", "unitPrice");
+                var totalPriceRaw = ReadDecimal(product, "total_price", "totalPrice");
+
+                var unitPrice = priceOverride ??
+                                unitPriceRaw ??
+                                (totalPriceRaw.HasValue
+                                    ? Math.Round(totalPriceRaw.Value / quantity, 2, MidpointRounding.AwayFromZero)
+                                    : 0m);
+                var totalPrice = totalPriceRaw ?? unitPrice * quantity;
+                var name = ReadString(product, "name", "product_name", "productName", "title") ?? menuItemId;
+
+                items.Add(new AdminOrderItemDto(
+                    Guid.NewGuid().ToString(),
+                    menuItemId,
+                    name,
+                    quantity,
+                    unitPrice,
+                    totalPrice,
+                    ReadString(product, "modifiers"),
+                    ReadString(product, "image_url", "imageUrl")));
+            }
+
+            return items;
+        }
+        catch (JsonException)
+        {
+            return new List<AdminOrderItemDto>();
+        }
+    }
+
+    private static bool TryExtractProductsArray(JsonElement root, out JsonElement products)
+    {
+        products = default;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if ((root.TryGetProperty("products", out products) ||
+             root.TryGetProperty("items", out products) ||
+             root.TryGetProperty("order_items", out products) ||
+             root.TryGetProperty("orderItems", out products)) &&
+            products.ValueKind == JsonValueKind.Array)
+        {
+            return true;
+        }
+
+        if ((root.TryGetProperty("orderDetails", out var nested) ||
+             root.TryGetProperty("order_details", out nested)) &&
+            nested.ValueKind == JsonValueKind.Object)
+        {
+            return TryExtractProductsArray(nested, out products);
+        }
+
+        return false;
+    }
+
+    private static string? ReadString(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(name, out var element))
+            {
+                continue;
+            }
+
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                var text = element.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Number)
+            {
+                return element.GetRawText();
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ReadInt(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(name, out var element))
+            {
+                continue;
+            }
+
+            if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var numeric))
+            {
+                return numeric;
+            }
+
+            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var fractional))
+            {
+                return (int)Math.Round(fractional, MidpointRounding.AwayFromZero);
+            }
+
+            if (element.ValueKind == JsonValueKind.String &&
+                int.TryParse(element.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
+            {
+                return parsedInt;
+            }
+
+            if (element.ValueKind == JsonValueKind.String &&
+                double.TryParse(element.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedDouble))
+            {
+                return (int)Math.Round(parsedDouble, MidpointRounding.AwayFromZero);
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal? ReadDecimal(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(name, out var element))
+            {
+                continue;
+            }
+
+            if (element.ValueKind == JsonValueKind.Number && element.TryGetDecimal(out var numeric))
+            {
+                return numeric;
+            }
+
+            if (element.ValueKind == JsonValueKind.String &&
+                decimal.TryParse(element.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private sealed record AdminOrderItemDto(
+        string Id,
+        string? MenuItemId,
+        string? Name,
+        int Quantity,
+        decimal Price,
+        decimal TotalPrice,
+        string? Modifiers,
+        string? ImageUrl);
 
     private Guid ResolveTenantId()
     {

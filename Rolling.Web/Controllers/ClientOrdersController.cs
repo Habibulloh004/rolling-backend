@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Abstractions.Realtime;
+using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
@@ -16,21 +17,64 @@ namespace Rolling.Web.Controllers;
 [Route("api/client/orders")]
 public sealed class ClientOrdersController : ControllerBase
 {
+    private const int ServiceModeTakeaway = 2;
+
     private readonly AppDbContext _dbContext;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
     private readonly ILogger<ClientOrdersController> _logger;
 
     public ClientOrdersController(
         AppDbContext dbContext,
         ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
         IOrderUpdatesPublisher orderUpdatesPublisher,
         ILogger<ClientOrdersController> logger)
     {
         _dbContext = dbContext;
         _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
         _orderUpdatesPublisher = orderUpdatesPublisher;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Get full order list for a customer by phone number.
+    /// Used by mobile clients to import orders created outside the app (e.g., admin recreation).
+    /// GET /api/client/orders?phone=998901234567
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetOrdersAsync(
+        [FromQuery] string phone,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return BadRequest(new { error = "Phone is required" });
+        }
+
+        var normalizedPhone = NormalizePhone(phone);
+        var size = Math.Clamp(limit, 1, 200);
+
+        var orders = await _dbContext.Orders
+            .AsNoTracking()
+            .Include(o => o.Items)
+            .Include(o => o.Timeline)
+            .Where(o => o.Phone == normalizedPhone || o.Phone == phone)
+            .OrderByDescending(o => o.CreatedAt)
+            .Take(size)
+            .ToListAsync(cancellationToken);
+
+        var response = orders.Select(MapOrderResponse).ToList();
+
+        _logger.LogInformation(
+            "Fetched {Count} full orders for phone {Phone}",
+            response.Count,
+            normalizedPhone);
+
+        return Ok(new { orders = response });
     }
 
     /// <summary>
@@ -136,6 +180,7 @@ public sealed class ClientOrdersController : ControllerBase
 
         _orderTracker.UpdateOrderStatus(order.Id, OrderStatus.Cancelled);
         _orderTracker.UntrackOrder(order.Id);
+        UpdateTakeawayTracker(order, OrderStatus.Cancelled);
 
         await _orderUpdatesPublisher.PublishAsync(
             OrderUpdateEventFactory.Create(order, "updated"),
@@ -148,6 +193,111 @@ public sealed class ClientOrdersController : ControllerBase
             orderId = order.Id,
             orderNumber = order.OrderNumber
         });
+    }
+
+    /// <summary>
+    /// Update language used for push notifications of an active order.
+    /// POST /api/client/orders/language
+    /// </summary>
+    [HttpPost("language")]
+    public async Task<IActionResult> UpdateOrderLanguageAsync(
+        [FromBody] UpdateOrderLanguageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { error = "Request body is required" });
+        }
+
+        var normalizedLanguage = NormalizeLanguage(request.Language);
+        if (normalizedLanguage is null)
+        {
+            return BadRequest(new { error = "Unsupported language. Use: en, uz, or ru" });
+        }
+
+        var normalizedOrderNumber = NormalizeOrderIdentifier(request.OrderNumber);
+        var normalizedIncomingOrderId = NormalizeOrderIdentifier(request.PosterIncomingOrderId);
+        var normalizedTransactionId = NormalizeOrderIdentifier(request.PosterTransactionId);
+
+        if (string.IsNullOrWhiteSpace(request.OrderId) &&
+            string.IsNullOrWhiteSpace(normalizedOrderNumber) &&
+            string.IsNullOrWhiteSpace(normalizedIncomingOrderId) &&
+            string.IsNullOrWhiteSpace(normalizedTransactionId))
+        {
+            return BadRequest(new { error = "orderId, orderNumber, posterIncomingOrderId, or posterTransactionId is required" });
+        }
+
+        var order = await _dbContext.Orders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o =>
+                (!string.IsNullOrWhiteSpace(request.OrderId) && o.Id == request.OrderId) ||
+                (!string.IsNullOrWhiteSpace(normalizedTransactionId) && o.PosterTransactionId == normalizedTransactionId) ||
+                (!string.IsNullOrWhiteSpace(normalizedIncomingOrderId) && o.PosterIncomingOrderId == normalizedIncomingOrderId) ||
+                (!string.IsNullOrWhiteSpace(normalizedOrderNumber) &&
+                    (o.OrderNumber == normalizedOrderNumber || o.OrderNumber == $"#{normalizedOrderNumber}")),
+                cancellationToken);
+
+        if (order is null)
+        {
+            return NotFound(new { error = "Order not found" });
+        }
+
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled)
+        {
+            return Conflict(new { error = "Order is not active", orderId = order.Id, status = MapStatus(order.Status) });
+        }
+
+        var trackerUpdated = _orderTracker.UpdateOrderLanguage(order.Id, normalizedLanguage);
+        if (!trackerUpdated)
+        {
+            _orderTracker.TrackOrder(new TrackedOrder
+            {
+                OrderId = order.Id,
+                OrderNumber = order.OrderNumber,
+                PosterIncomingOrderId = order.PosterIncomingOrderId,
+                PosterTransactionId = order.PosterTransactionId,
+                FcmToken = order.FcmToken,
+                Phone = order.Phone,
+                CurrentStatus = order.Status,
+                ServiceMode = order.ServiceMode,
+                LastPosterStatus = order.Status,
+                LastCheckedAt = DateTime.UtcNow,
+                Language = normalizedLanguage
+            });
+        }
+
+        UpdateTakeawayTracker(order, order.Status);
+
+        _logger.LogInformation(
+            "Updated active order language: OrderId={OrderId}, OrderNumber={OrderNumber}, Language={Language}, TrackerUpdated={TrackerUpdated}",
+            order.Id,
+            order.OrderNumber,
+            normalizedLanguage,
+            trackerUpdated);
+
+        return Ok(new
+        {
+            updated = true,
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            language = normalizedLanguage
+        });
+    }
+
+    private void UpdateTakeawayTracker(Order order, OrderStatus status)
+    {
+        if (order.ServiceMode != ServiceModeTakeaway)
+        {
+            return;
+        }
+
+        if (status is OrderStatus.Delivered or OrderStatus.Cancelled)
+        {
+            _takeawayOrderTracker.UntrackOrder(order.Id);
+            return;
+        }
+
+        _takeawayOrderTracker.TrackOrder(order);
     }
 
     /// <summary>
@@ -224,6 +374,17 @@ public sealed class ClientOrdersController : ControllerBase
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
+    private static string? NormalizeLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            return null;
+        }
+
+        var trimmed = language.Trim().ToLowerInvariant();
+        return NotificationService.IsLanguageSupported(trimmed) ? trimmed : null;
+    }
+
     private static string MapStatus(OrderStatus status) => status switch
     {
         OrderStatus.AwaitingPayment => "awaitingPayment",
@@ -235,6 +396,127 @@ public sealed class ClientOrdersController : ControllerBase
         OrderStatus.Cancelled => "cancelled",
         _ => "pending"
     };
+
+    private static OrderResponse MapOrderResponse(Order order)
+    {
+        var timeline = order.Timeline
+            .OrderBy(t => t.SortOrder)
+            .Select(t => new TimelineEventResponse
+            {
+                Id = t.Id,
+                Title = t.Title,
+                Time = t.Time,
+                IsCompleted = t.IsCompleted,
+                IsCurrent = t.IsCurrent
+            })
+            .ToList();
+
+        var items = order.Items.Select(item => new OrderItemResponse
+        {
+            Id = item.Id,
+            MenuItemId = item.MenuItemId,
+            Name = item.Name,
+            Quantity = item.Quantity,
+            Price = item.Price,
+            TotalPrice = item.TotalPrice,
+            Modifiers = item.Modifiers,
+            ImageUrl = item.ImageUrl,
+            IsBonus = item.IsBonus
+        }).ToList();
+
+        CourierResponse? courier = null;
+        if (!string.IsNullOrWhiteSpace(order.CourierId) ||
+            !string.IsNullOrWhiteSpace(order.CourierName) ||
+            !string.IsNullOrWhiteSpace(order.CourierPhone))
+        {
+            CourierLocationResponse? location = null;
+            if (order.CourierLatitude.HasValue && order.CourierLongitude.HasValue && order.CourierLocationLastUpdated.HasValue)
+            {
+                location = new CourierLocationResponse
+                {
+                    Latitude = order.CourierLatitude.Value,
+                    Longitude = order.CourierLongitude.Value,
+                    LastUpdated = order.CourierLocationLastUpdated.Value
+                };
+            }
+
+            courier = new CourierResponse
+            {
+                Id = order.CourierId ?? string.Empty,
+                Name = order.CourierName ?? string.Empty,
+                Rating = order.CourierRating ?? 0,
+                PhotoUrl = order.CourierPhotoUrl,
+                Vehicle = order.CourierVehicle ?? string.Empty,
+                LicensePlate = order.CourierLicensePlate ?? string.Empty,
+                Phone = order.CourierPhone ?? string.Empty,
+                Location = location
+            };
+        }
+
+        BranchResponse? branch = null;
+        if (!string.IsNullOrWhiteSpace(order.BranchId))
+        {
+            branch = new BranchResponse
+            {
+                Id = order.BranchId ?? string.Empty,
+                Name = order.BranchName ?? string.Empty,
+                Address = order.BranchAddress ?? string.Empty,
+                Phone = order.BranchPhone
+            };
+        }
+
+        return new OrderResponse
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            Date = order.Date,
+            Items = items,
+            Subtotal = order.Subtotal,
+            DeliveryFee = order.DeliveryFee,
+            Discount = order.Discount,
+            Total = order.Total,
+            Status = MapStatus(order.Status),
+            Timeline = timeline,
+            DeliveryAddress = order.DeliveryAddress,
+            DeliveryLatitude = order.DeliveryLatitude,
+            DeliveryLongitude = order.DeliveryLongitude,
+            DeliveryAddressComment = order.DeliveryAddressComment,
+            PaymentMethod = order.PaymentMethod,
+            PaymentMethodId = order.PaymentMethodId,
+            PaymentTransactionId = order.PaymentTransactionId,
+            PaymentErrorCode = order.PaymentErrorCode,
+            PaymentErrorMessage = order.PaymentErrorMessage,
+            PaymentAttempts = order.PaymentAttempts,
+            EstimatedDeliveryTime = order.EstimatedDeliveryTime,
+            ActualDeliveryTime = order.ActualDeliveryTime,
+            EstimatedDeliveryMinutesMin = order.EstimatedDeliveryMinutesMin,
+            EstimatedDeliveryMinutesMax = order.EstimatedDeliveryMinutesMax,
+            Courier = courier,
+            Branch = branch,
+            PosterSpotId = order.PosterSpotId,
+            PosterIncomingOrderId = order.PosterIncomingOrderId,
+            PosterTransactionId = order.PosterTransactionId,
+            CountedTowardsLoyalty = order.CountedTowardsLoyalty,
+            LoyaltyPointsSpent = order.LoyaltyPointsSpent,
+            LoyaltyPointsEarnedPending = order.LoyaltyPointsEarnedPending,
+            LoyaltyPointsEarnedActual = order.LoyaltyPointsEarnedActual,
+            ReceiptUrl = order.ReceiptUrl,
+            Phone = order.Phone,
+            AlternatePhone = order.AlternatePhone,
+            FirstName = order.FirstName,
+            LastName = order.LastName,
+            Comment = order.Comment,
+            ServiceMode = order.ServiceMode,
+            PromoCode = order.PromoCode,
+            PromoDiscountAmount = order.PromoDiscountAmount,
+            PromoDiscountPercentage = order.PromoDiscountPercentage,
+            UserId = order.UserId,
+            UserOrderCount = order.UserOrderCount,
+            FcmToken = order.FcmToken,
+            CreatedAt = order.CreatedAt,
+            UpdatedAt = order.UpdatedAt
+        };
+    }
 }
 
 public sealed class OrderStatusDto

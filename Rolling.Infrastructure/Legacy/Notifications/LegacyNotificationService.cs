@@ -25,6 +25,8 @@ public sealed class NotificationService
             ["orderPending"] = "Order received, awaiting confirmation",
             ["orderAccepted"] = "Your order has been accepted!",
             ["orderPreparing"] = "Your order is being prepared",
+            ["orderReadyForPickup"] = "Your order is ready for pickup!",
+            ["orderTaken"] = "Your order has been picked up",
             ["orderOnTheWay"] = "Your order is on the way!",
             ["orderDelivered"] = "Your order has been delivered",
             ["orderCancelled"] = "Your order has been cancelled"
@@ -38,6 +40,8 @@ public sealed class NotificationService
             ["orderPending"] = "Buyurtmangiz qabul qilindi, tasdiqlash kutilmoqda",
             ["orderAccepted"] = "Buyurtmangiz qabul qilindi!",
             ["orderPreparing"] = "Buyurtmangiz tayyorlanmoqda",
+            ["orderReadyForPickup"] = "Buyurtmangiz olib ketish uchun tayyor!",
+            ["orderTaken"] = "Buyurtmangiz olib ketildi",
             ["orderOnTheWay"] = "Buyurtmangiz yo'lda!",
             ["orderDelivered"] = "Buyurtmangiz yetkazildi",
             ["orderCancelled"] = "Buyurtmangiz bekor qilindi"
@@ -51,6 +55,8 @@ public sealed class NotificationService
             ["orderPending"] = "Заказ получен, ждём подтверждения",
             ["orderAccepted"] = "Ваш заказ принят!",
             ["orderPreparing"] = "Ваш заказ готовится",
+            ["orderReadyForPickup"] = "Заказ готов к самовывозу!",
+            ["orderTaken"] = "Заказ забран",
             ["orderOnTheWay"] = "Ваш заказ в пути!",
             ["orderDelivered"] = "Ваш заказ доставлен",
             ["orderCancelled"] = "Ваш заказ отменён"
@@ -555,6 +561,7 @@ public sealed class NotificationService
         string? posterTransactionId,
         string status,
         string language,
+        int? serviceMode,
         CancellationToken cancellationToken)
     {
         using var activity = ActivitySource.StartActivity("SendOrderStatusUpdate");
@@ -577,8 +584,8 @@ public sealed class NotificationService
             "pending" => "orderPending",
             "accepted" => "orderAccepted",
             "preparing" => "orderPreparing",
-            "onTheWay" => "orderOnTheWay",
-            "delivered" => "orderDelivered",
+            "onTheWay" => serviceMode == 2 ? "orderReadyForPickup" : "orderOnTheWay",
+            "delivered" => serviceMode == 2 ? "orderTaken" : "orderDelivered",
             "cancelled" => "orderCancelled",
             _ => "orderReady"
         };

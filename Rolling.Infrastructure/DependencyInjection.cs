@@ -128,6 +128,8 @@ public static class DependencyInjection
 
         // Active Order Tracker (singleton for tracking orders across requests)
         services.AddSingleton<Rolling.Infrastructure.Orders.ActiveOrderTracker>();
+        services.AddSingleton<Rolling.Infrastructure.Orders.TakeawayOrderTracker>();
+        services.AddSingleton<Rolling.Infrastructure.Orders.TakeawayAutomationSettingsCache>();
 
         // Pending Payment Tracker (singleton for tracking pending payments across requests)
         services.AddSingleton<PendingPaymentTracker>();

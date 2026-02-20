@@ -20,8 +20,16 @@ namespace Rolling.Web.HostedServices;
 /// </summary>
 public sealed class OrderStatusPollingService : BackgroundService
 {
+    private const int TakeawayServiceMode = 2;
+    private const int MinAutomationDelaySeconds = 0;
+    private const int MaxAutomationDelaySeconds = 24 * 60 * 60;
+    private static readonly TimeSpan TakeawaySettingsRefreshInterval = TimeSpan.FromSeconds(30);
+    private const int TakeawayHydrationLookbackDays = 2;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
+    private readonly TakeawayAutomationSettingsCache _takeawaySettingsCache;
     private readonly NotificationTokenStore _tokenStore;
     private readonly OrderPollingOptions _options;
     private readonly ILogger<OrderStatusPollingService> _logger;
@@ -29,12 +37,16 @@ public sealed class OrderStatusPollingService : BackgroundService
     public OrderStatusPollingService(
         IServiceScopeFactory scopeFactory,
         ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
+        TakeawayAutomationSettingsCache takeawaySettingsCache,
         NotificationTokenStore tokenStore,
         IOptions<OrderPollingOptions> options,
         ILogger<OrderStatusPollingService> logger)
     {
         _scopeFactory = scopeFactory;
         _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
+        _takeawaySettingsCache = takeawaySettingsCache;
         _tokenStore = tokenStore;
         _options = options.Value;
         _logger = logger;
@@ -42,21 +54,26 @@ public sealed class OrderStatusPollingService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
+        if (_options.Enabled)
         {
-            _logger.LogInformation("Order status polling is disabled");
-            return;
+            _logger.LogInformation(
+                "Order status polling started. Interval: {Interval}s, LookbackDays: {LookbackDays}d, Max tracking: {MaxMinutes}m",
+                _options.PollingIntervalSeconds,
+                _options.TransactionsLookbackDays,
+                _options.MaxTrackingMinutes);
         }
-
-        _logger.LogInformation(
-            "Order status polling started. Interval: {Interval}s, LookbackDays: {LookbackDays}d, Max tracking: {MaxMinutes}m",
-            _options.PollingIntervalSeconds,
-            _options.TransactionsLookbackDays,
-            _options.MaxTrackingMinutes);
+        else
+        {
+            _logger.LogInformation(
+                "Poster polling is disabled. Running takeaway automation only. Interval: {Interval}s",
+                _options.PollingIntervalSeconds);
+        }
 
         try
         {
             await HydrateTrackedOrdersAsync(stoppingToken);
+            await HydrateTakeawayOrdersAsync(stoppingToken);
+            await WarmupTakeawaySettingsCacheAsync(stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -90,9 +107,7 @@ public sealed class OrderStatusPollingService : BackgroundService
     private async Task PollOrderStatusesAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var posterService = scope.ServiceProvider.GetRequiredService<PosterService>();
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
-        var telegramService = scope.ServiceProvider.GetRequiredService<TelegramService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
 
@@ -103,6 +118,20 @@ public sealed class OrderStatusPollingService : BackgroundService
 
         var trackedOrders = _orderTracker.GetTrackedOrders();
         var initialTrackedCount = trackedOrders.Count;
+        await ProcessTakeawayAutomationAsync(
+            dbContext,
+            notificationService,
+            orderUpdatesPublisher,
+            cancellationToken);
+
+        if (!_options.Enabled)
+        {
+            return;
+        }
+
+        var posterService = scope.ServiceProvider.GetRequiredService<PosterService>();
+        var telegramService = scope.ServiceProvider.GetRequiredService<TelegramService>();
+
         if (initialTrackedCount == 0)
         {
             _logger.LogDebug("Polling cycle skipped - no tracked orders");
@@ -478,6 +507,7 @@ public sealed class OrderStatusPollingService : BackgroundService
             FcmToken = order.FcmToken,
             Phone = order.Phone,
             CurrentStatus = order.Status,
+            ServiceMode = order.ServiceMode,
             Language = ResolveLanguage(order.FcmToken)
         };
     }
@@ -499,6 +529,11 @@ public sealed class OrderStatusPollingService : BackgroundService
     {
         if (!_orderTracker.IsTracked(orderId))
         {
+            if (IsTerminalStatus(status))
+            {
+                _takeawayOrderTracker.UntrackOrder(orderId);
+            }
+
             return;
         }
 
@@ -506,7 +541,42 @@ public sealed class OrderStatusPollingService : BackgroundService
         if (IsTerminalStatus(status))
         {
             _orderTracker.UntrackOrder(orderId);
+            _takeawayOrderTracker.UntrackOrder(orderId);
         }
+    }
+
+    private void TrackOrUpdateOrder(Order order)
+    {
+        UpdateTakeawayTracker(order);
+
+        if (_orderTracker.IsTracked(order.Id))
+        {
+            UpdateTrackedOrderStatus(order.Id, order.Status);
+            return;
+        }
+
+        if (IsTerminalStatus(order.Status))
+        {
+            return;
+        }
+
+        _orderTracker.TrackOrder(BuildTrackedOrder(order));
+    }
+
+    private void UpdateTakeawayTracker(Order order)
+    {
+        if (order.ServiceMode != TakeawayServiceMode)
+        {
+            return;
+        }
+
+        if (IsTerminalStatus(order.Status))
+        {
+            _takeawayOrderTracker.UntrackOrder(order.Id);
+            return;
+        }
+
+        _takeawayOrderTracker.TrackOrder(order);
     }
 
     private async Task HydrateTrackedOrdersAsync(CancellationToken cancellationToken)
@@ -545,6 +615,50 @@ public sealed class OrderStatusPollingService : BackgroundService
             "Hydrated {OrderCount} active orders for polling (created since {Cutoff})",
             openOrders.Count,
             cutoff);
+    }
+
+    private async Task HydrateTakeawayOrdersAsync(CancellationToken cancellationToken)
+    {
+        if (_takeawayOrderTracker.TrackedCount > 0)
+        {
+            return;
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var cutoff = DateTime.UtcNow.AddDays(-TakeawayHydrationLookbackDays);
+        var openTakeawayOrderIds = await dbContext.Orders
+            .AsNoTracking()
+            .Where(order => order.ServiceMode == TakeawayServiceMode &&
+                order.CreatedAt >= cutoff &&
+                order.Status != OrderStatus.Delivered &&
+                order.Status != OrderStatus.Cancelled)
+            .Select(order => order.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var orderId in openTakeawayOrderIds)
+        {
+            _takeawayOrderTracker.TrackOrder(orderId);
+        }
+
+        _logger.LogInformation(
+            "Hydrated {OrderCount} active takeaway orders for automation (created since {Cutoff})",
+            openTakeawayOrderIds.Count,
+            cutoff);
+    }
+
+    private async Task WarmupTakeawaySettingsCacheAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var snapshot = await GetTakeawaySettingsSnapshotAsync(dbContext, cancellationToken);
+        _logger.LogInformation(
+            "Takeaway automation settings cache warmup complete: PreparingDelay={PreparingDelaySeconds}s, ReadyDelay={ReadyDelaySeconds}s, UpdatedAt={UpdatedAt:o}",
+            snapshot.PreparingDelaySeconds,
+            snapshot.ReadyForPickupDelaySeconds,
+            snapshot.UpdatedAt);
     }
 
     private void PruneTrackedOrders(DateTime now)
@@ -604,6 +718,7 @@ public sealed class OrderStatusPollingService : BackgroundService
                     "Removing order {OrderId} from tracking - missing in database",
                     trackedOrder.OrderId);
                 _orderTracker.UntrackOrder(trackedOrder.OrderId);
+                _takeawayOrderTracker.UntrackOrder(trackedOrder.OrderId);
                 continue;
             }
 
@@ -615,10 +730,295 @@ public sealed class OrderStatusPollingService : BackgroundService
             if (IsTerminalStatus(dbStatus))
             {
                 _orderTracker.UntrackOrder(trackedOrder.OrderId);
+                _takeawayOrderTracker.UntrackOrder(trackedOrder.OrderId);
             }
         }
 
         return _orderTracker.GetTrackedOrders();
+    }
+
+    private async Task ProcessTakeawayAutomationAsync(
+        AppDbContext dbContext,
+        NotificationService notificationService,
+        IOrderUpdatesPublisher orderUpdatesPublisher,
+        CancellationToken cancellationToken)
+    {
+        var trackedOrderIds = _takeawayOrderTracker.GetTrackedOrderIds();
+        if (trackedOrderIds.Count == 0)
+        {
+            return;
+        }
+
+        var settings = await GetTakeawaySettingsSnapshotAsync(dbContext, cancellationToken);
+        var preparingDelay = TimeSpan.FromSeconds(NormalizeAutomationDelaySeconds(settings.PreparingDelaySeconds));
+        var readyForPickupDelay = TimeSpan.FromSeconds(NormalizeAutomationDelaySeconds(settings.ReadyForPickupDelaySeconds));
+
+        if (readyForPickupDelay < preparingDelay)
+        {
+            readyForPickupDelay = preparingDelay;
+        }
+
+        var now = DateTime.UtcNow;
+
+        var candidates = await dbContext.Orders
+            .Where(order => trackedOrderIds.Contains(order.Id))
+            .OrderBy(order => order.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var candidateIds = new HashSet<string>(candidates.Select(order => order.Id), StringComparer.Ordinal);
+        foreach (var orderId in trackedOrderIds)
+        {
+            if (!candidateIds.Contains(orderId))
+            {
+                _takeawayOrderTracker.UntrackOrder(orderId);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var metadataUpdated = 0;
+        var transitioned = 0;
+        var notified = 0;
+        var removedFromTracker = 0;
+
+        foreach (var order in candidates)
+        {
+            try
+            {
+                if (order.ServiceMode != TakeawayServiceMode || IsTerminalStatus(order.Status))
+                {
+                    if (_takeawayOrderTracker.UntrackOrder(order.Id))
+                    {
+                        removedFromTracker++;
+                    }
+
+                    continue;
+                }
+
+                if (EnsureTakeawayAutomationMetadata(order, now))
+                {
+                    metadataUpdated++;
+                }
+
+                if (order.TakeawayAcceptedAt is null)
+                {
+                    continue;
+                }
+
+                var acceptedAt = order.TakeawayAcceptedAt.Value;
+
+                if (order.Status == OrderStatus.Accepted &&
+                    now >= acceptedAt.Add(preparingDelay))
+                {
+                    var previousStatus = order.Status;
+                    order.Status = OrderStatus.Preparing;
+                    order.TakeawayPreparingAt ??= now;
+                    order.UpdatedAt = now;
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+
+                    transitioned++;
+                    TrackOrUpdateOrder(order);
+                    await orderUpdatesPublisher.PublishAsync(
+                        OrderUpdateEventFactory.Create(order, "updated"),
+                        cancellationToken);
+
+                    if (await TryNotifyAutomationStatusAsync(
+                            notificationService,
+                            order,
+                            previousStatus,
+                            OrderStatus.Preparing,
+                            cancellationToken))
+                    {
+                        notified++;
+                    }
+                }
+
+                if (order.Status == OrderStatus.Preparing &&
+                    now >= acceptedAt.Add(readyForPickupDelay))
+                {
+                    var previousStatus = order.Status;
+                    order.Status = OrderStatus.OnTheWay;
+                    order.TakeawayReadyForPickupAt ??= now;
+                    order.UpdatedAt = now;
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+
+                    transitioned++;
+                    TrackOrUpdateOrder(order);
+                    await orderUpdatesPublisher.PublishAsync(
+                        OrderUpdateEventFactory.Create(order, "updated"),
+                        cancellationToken);
+
+                    if (await TryNotifyAutomationStatusAsync(
+                            notificationService,
+                            order,
+                            previousStatus,
+                            OrderStatus.OnTheWay,
+                            cancellationToken))
+                    {
+                        notified++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Takeaway automation failed for order {OrderId}",
+                    order.Id);
+            }
+        }
+
+        if (metadataUpdated > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (transitioned > 0 || metadataUpdated > 0)
+        {
+            _logger.LogInformation(
+                "Takeaway automation cycle: Tracked={TrackedCount}, Candidates={Candidates}, MetadataUpdated={MetadataUpdated}, Transitioned={Transitioned}, Notified={Notified}, RemovedFromTracker={RemovedFromTracker}, PreparingDelay={PreparingDelaySeconds}s, ReadyDelay={ReadyDelaySeconds}s",
+                trackedOrderIds.Count,
+                candidates.Count,
+                metadataUpdated,
+                transitioned,
+                notified,
+                removedFromTracker,
+                (int)preparingDelay.TotalSeconds,
+                (int)readyForPickupDelay.TotalSeconds);
+        }
+    }
+
+    private async Task<bool> TryNotifyAutomationStatusAsync(
+        NotificationService notificationService,
+        Order order,
+        OrderStatus previousStatus,
+        OrderStatus newStatus,
+        CancellationToken cancellationToken)
+    {
+        if (!ShouldNotifyStatus(newStatus))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(order.FcmToken))
+        {
+            _logger.LogWarning(
+                "Takeaway automation notification skipped - no FCM token: OrderId={OrderId}, OrderNumber={OrderNumber}, Status={Status}",
+                order.Id,
+                order.OrderNumber,
+                newStatus);
+            return false;
+        }
+
+        var trackedOrder = BuildTrackedOrder(order);
+        await SendStatusNotificationsAsync(
+            notificationService,
+            trackedOrder,
+            previousStatus,
+            newStatus,
+            cancellationToken);
+        return true;
+    }
+
+    private static int NormalizeAutomationDelaySeconds(int value) =>
+        Math.Clamp(value, MinAutomationDelaySeconds, MaxAutomationDelaySeconds);
+
+    private static bool EnsureTakeawayAutomationMetadata(Order order, DateTime now)
+    {
+        if (order.ServiceMode != TakeawayServiceMode)
+        {
+            return false;
+        }
+
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Pending or OrderStatus.AwaitingPayment)
+        {
+            return false;
+        }
+
+        var changed = false;
+        var baselineTime = order.UpdatedAt == default ? now : order.UpdatedAt;
+
+        if (order.TakeawayAcceptedAt is null)
+        {
+            order.TakeawayAcceptedAt = baselineTime;
+            changed = true;
+        }
+
+        if (StatusRank(order.Status) >= StatusRank(OrderStatus.Preparing) &&
+            order.TakeawayPreparingAt is null)
+        {
+            order.TakeawayPreparingAt = baselineTime;
+            changed = true;
+        }
+
+        if (StatusRank(order.Status) >= StatusRank(OrderStatus.OnTheWay) &&
+            order.TakeawayReadyForPickupAt is null)
+        {
+            order.TakeawayReadyForPickupAt = baselineTime;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private async Task<TakeawayAutomationSettingsSnapshot> GetTakeawaySettingsSnapshotAsync(
+        AppDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        if (!_takeawaySettingsCache.ShouldRefresh(TakeawaySettingsRefreshInterval, now))
+        {
+            return _takeawaySettingsCache.Snapshot;
+        }
+
+        var settings = await dbContext.TakeawayAutomationSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? await EnsureTakeawaySettingsRowAsync(dbContext, cancellationToken);
+
+        var normalizedPreparingDelaySeconds = NormalizeAutomationDelaySeconds(settings.PreparingDelaySeconds);
+        var normalizedReadyDelaySeconds = NormalizeAutomationDelaySeconds(settings.ReadyForPickupDelaySeconds);
+        var updatedAt = settings.UpdatedAt == default ? now : settings.UpdatedAt;
+
+        _takeawaySettingsCache.Set(
+            normalizedPreparingDelaySeconds,
+            normalizedReadyDelaySeconds,
+            updatedAt,
+            now);
+
+        return _takeawaySettingsCache.Snapshot;
+    }
+
+    private static async Task<TakeawayAutomationSettings> EnsureTakeawaySettingsRowAsync(
+        AppDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var created = new TakeawayAutomationSettings
+        {
+            Id = TakeawayAutomationSettings.SingletonId,
+            PreparingDelaySeconds = 300,
+            ReadyForPickupDelaySeconds = 1800,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        dbContext.TakeawayAutomationSettings.Add(created);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return created;
+        }
+        catch (DbUpdateException)
+        {
+            return await dbContext.TakeawayAutomationSettings
+                .AsNoTracking()
+                .FirstAsync(cancellationToken);
+        }
     }
 
     private static bool TryBuildPosterStatusLookups(
@@ -1824,6 +2224,7 @@ public sealed class OrderStatusPollingService : BackgroundService
 
         order.Status = newStatus;
         order.UpdatedAt = DateTime.UtcNow;
+        EnsureTakeawayAutomationMetadata(order, order.UpdatedAt);
         await dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation(
             "Order status updated via polling: OrderId={OrderId}, Status={Status}",
@@ -1923,6 +2324,7 @@ public sealed class OrderStatusPollingService : BackgroundService
                 trackedOrder.PosterTransactionId,
                 statusString,
                 trackedOrder.Language,
+                trackedOrder.ServiceMode,
                 cancellationToken);
 
             _logger.LogInformation(

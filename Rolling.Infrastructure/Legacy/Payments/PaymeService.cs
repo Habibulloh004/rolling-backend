@@ -501,7 +501,8 @@ public sealed class PaymeService
             return false;
         }
 
-        if (!doc.Value.TryGetProperty("service_mode", out var element))
+        if (!doc.Value.TryGetProperty("service_mode", out var element) &&
+            !doc.Value.TryGetProperty("serviceMode", out element))
         {
             return false;
         }

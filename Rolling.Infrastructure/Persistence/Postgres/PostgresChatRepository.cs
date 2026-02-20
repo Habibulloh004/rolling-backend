@@ -127,32 +127,58 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
             .Take(length)
             .ToListAsync(cancellationToken);
 
-        var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>();
+        if (threads.Count == 0)
+        {
+            return Array.Empty<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>();
+        }
 
+        var threadIds = threads.Select(t => t.Id).ToArray();
+        var orderIds = threads
+            .Select(t => t.OrderId.ToString())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var lastMessages = await _dbContext.ChatMessages
+            .AsNoTracking()
+            .Where(m => threadIds.Contains(m.ThreadId))
+            .GroupBy(m => m.ThreadId)
+            .Select(g => g
+                .OrderByDescending(m => m.SentAt)
+                .ThenByDescending(m => m.Id)
+                .First())
+            .ToListAsync(cancellationToken);
+
+        var orders = await _dbContext.Orders
+            .AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id))
+            .Select(o => new
+            {
+                o.Id,
+                o.OrderNumber,
+                o.PosterIncomingOrderId,
+                o.PosterTransactionId,
+                Status = (int)o.Status,
+                o.FirstName,
+                o.LastName
+            })
+            .ToListAsync(cancellationToken);
+
+        var lastMessageByThreadId = lastMessages.ToDictionary(m => m.ThreadId, m => m, EqualityComparer<Guid>.Default);
+        var orderById = orders.ToDictionary(o => o.Id, o => o, StringComparer.Ordinal);
+
+        var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>(threads.Count);
         foreach (var thread in threads)
         {
-            var lastMessage = await _dbContext.ChatMessages
-                .AsNoTracking()
-                .Where(m => m.ThreadId == thread.Id)
-                .OrderByDescending(m => m.SentAt)
-                .FirstOrDefaultAsync(cancellationToken);
+            lastMessageByThreadId.TryGetValue(thread.Id, out var lastMessage);
+            orderById.TryGetValue(thread.OrderId.ToString(), out var order);
 
-            // Look up order number from orders table
-            var orderIdString = thread.OrderId.ToString();
-            var order = await _dbContext.Orders
-                .AsNoTracking()
-                .Where(o => o.Id == orderIdString)
-                .Select(o => new
-                {
-                    o.OrderNumber,
-                    Status = (int)o.Status,
-                    o.FirstName,
-                    o.LastName
-                })
-                .FirstOrDefaultAsync(cancellationToken);
-
+            var displayOrderNumber = ResolveDisplayOrderNumber(
+                order?.PosterIncomingOrderId,
+                order?.PosterTransactionId,
+                order?.OrderNumber);
             var orderCustomerName = BuildCustomerName(order?.FirstName, order?.LastName);
-            result.Add((thread.ToDomain(), lastMessage?.ToDomain(), order?.OrderNumber, order?.Status, orderCustomerName));
+
+            result.Add((thread.ToDomain(), lastMessage?.ToDomain(), displayOrderNumber, order?.Status, orderCustomerName));
         }
 
         return result;
@@ -168,6 +194,21 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
             new[] { first, last }.Where(part => !string.IsNullOrWhiteSpace(part)));
 
         return string.IsNullOrWhiteSpace(fullName) ? null : fullName;
+    }
+
+    private static string? ResolveDisplayOrderNumber(string? posterIncomingOrderId, string? posterTransactionId, string? orderNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
+        {
+            return posterIncomingOrderId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posterTransactionId))
+        {
+            return posterTransactionId;
+        }
+
+        return orderNumber;
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> GetUnreadCountsAsync(

@@ -15,6 +15,7 @@ public sealed class OrderProcessor
     private readonly PosterService _posterService;
     private readonly TelegramService _telegramService;
     private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly NotificationTokenStore _tokenStore;
     private readonly AppDbContext _dbContext;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
@@ -24,6 +25,7 @@ public sealed class OrderProcessor
         PosterService posterService,
         TelegramService telegramService,
         ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
         NotificationTokenStore tokenStore,
         AppDbContext dbContext,
         IOrderUpdatesPublisher orderUpdatesPublisher,
@@ -32,6 +34,7 @@ public sealed class OrderProcessor
         _posterService = posterService;
         _telegramService = telegramService;
         _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
         _tokenStore = tokenStore;
         _dbContext = dbContext;
         _orderUpdatesPublisher = orderUpdatesPublisher;
@@ -86,7 +89,8 @@ public sealed class OrderProcessor
     private static bool TryGetServiceMode(JsonElement root, out int serviceMode)
     {
         serviceMode = 0;
-        if (!root.TryGetProperty("service_mode", out var element))
+        if (!root.TryGetProperty("service_mode", out var element) &&
+            !root.TryGetProperty("serviceMode", out element))
         {
             return false;
         }
@@ -339,6 +343,8 @@ public sealed class OrderProcessor
 
     private void TrackOrderForPolling(Order order)
     {
+        UpdateTakeawayTracker(order);
+
         if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled)
         {
             return;
@@ -356,8 +362,25 @@ public sealed class OrderProcessor
             FcmToken = fcmToken,
             Phone = order.Phone,
             CurrentStatus = order.Status,
+            ServiceMode = order.ServiceMode,
             Language = language
         });
+    }
+
+    private void UpdateTakeawayTracker(Order order)
+    {
+        if (order.ServiceMode != 2)
+        {
+            return;
+        }
+
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled)
+        {
+            _takeawayOrderTracker.UntrackOrder(order.Id);
+            return;
+        }
+
+        _takeawayOrderTracker.TrackOrder(order);
     }
 
     private string ResolveLanguage(string? token)

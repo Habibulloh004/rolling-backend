@@ -13,6 +13,8 @@ public sealed class PaymentExpirationService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly PendingPaymentTracker _paymentTracker;
+    private readonly ActiveOrderTracker _orderTracker;
+    private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly ILogger<PaymentExpirationService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly PaymentTrackingOptions _options;
@@ -21,12 +23,16 @@ public sealed class PaymentExpirationService : BackgroundService
     public PaymentExpirationService(
         IServiceScopeFactory scopeFactory,
         PendingPaymentTracker paymentTracker,
+        ActiveOrderTracker orderTracker,
+        TakeawayOrderTracker takeawayOrderTracker,
         ILogger<PaymentExpirationService> logger,
         TimeProvider timeProvider,
         IOptions<PaymentTrackingOptions> options)
     {
         _scopeFactory = scopeFactory;
         _paymentTracker = paymentTracker;
+        _orderTracker = orderTracker;
+        _takeawayOrderTracker = takeawayOrderTracker;
         _logger = logger;
         _timeProvider = timeProvider;
         _options = options.Value;
@@ -152,6 +158,12 @@ public sealed class PaymentExpirationService : BackgroundService
 
         foreach (var order in updatedOrders)
         {
+            _orderTracker.UntrackOrder(order.Id);
+            if (order.ServiceMode == 2)
+            {
+                _takeawayOrderTracker.UntrackOrder(order.Id);
+            }
+
             await orderUpdatesPublisher.PublishAsync(
                 OrderUpdateEventFactory.Create(order, "updated"),
                 cancellationToken);

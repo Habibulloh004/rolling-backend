@@ -306,7 +306,8 @@ public sealed class ClickService
             return false;
         }
 
-        if (!doc.Value.TryGetProperty("service_mode", out var element))
+        if (!doc.Value.TryGetProperty("service_mode", out var element) &&
+            !doc.Value.TryGetProperty("serviceMode", out element))
         {
             return false;
         }
