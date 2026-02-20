@@ -259,6 +259,63 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
 
                     orderByThreadOrderId[thread.OrderId] = ranked[0].Order;
                 }
+
+                var stillUnresolvedThreads = unresolvedThreads
+                    .Where(thread => !orderByThreadOrderId.ContainsKey(thread.OrderId))
+                    .OrderBy(thread => thread.CreatedAt)
+                    .ToList();
+
+                if (stillUnresolvedThreads.Count > 0)
+                {
+                    var usedOrderIds = orderByThreadOrderId.Values
+                        .Select(order => order.Id)
+                        .ToHashSet(StringComparer.Ordinal);
+
+                    foreach (var thread in stillUnresolvedThreads)
+                    {
+                        var threadName = NormalizePersonName(
+                            thread.Participants
+                                .FirstOrDefault(participant => participant.Role == ChatParticipantRole.Customer)
+                                ?.DisplayName);
+                        if (string.IsNullOrWhiteSpace(threadName))
+                        {
+                            continue;
+                        }
+
+                        var nameMatched = allCandidateOrders
+                            .Where(order => !usedOrderIds.Contains(order.Id))
+                            .Select(order => new
+                            {
+                                Order = order,
+                                NormalizedName = NormalizePersonName(BuildCustomerName(order.FirstName, order.LastName))
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.NormalizedName) &&
+                                           string.Equals(item.NormalizedName, threadName, StringComparison.Ordinal))
+                            .Select(item => new
+                            {
+                                item.Order,
+                                DistanceMinutes = Math.Abs((item.Order.CreatedAt - thread.CreatedAt.UtcDateTime).TotalMinutes)
+                            })
+                            .Where(item => item.DistanceMinutes <= 24 * 60)
+                            .OrderBy(item => item.DistanceMinutes)
+                            .Take(2)
+                            .ToList();
+
+                        if (nameMatched.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        if (nameMatched.Count > 1 && nameMatched[0].DistanceMinutes + 20 >= nameMatched[1].DistanceMinutes)
+                        {
+                            continue;
+                        }
+
+                        var matchedOrder = nameMatched[0].Order;
+                        orderByThreadOrderId[thread.OrderId] = matchedOrder;
+                        usedOrderIds.Add(matchedOrder.Id);
+                    }
+                }
             }
         }
 
@@ -366,6 +423,20 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         }
 
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static string? NormalizePersonName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var collapsed = string.Join(
+            " ",
+            value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+        return collapsed.ToLowerInvariant();
     }
 
     private static bool TryResolveThreadOrderId(string? orderId, out Guid threadOrderId)
