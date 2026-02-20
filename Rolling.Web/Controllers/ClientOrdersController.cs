@@ -103,7 +103,7 @@ public sealed class ClientOrdersController : ControllerBase
             .Select(o => new OrderStatusDto
             {
                 Id = o.Id,
-                OrderNumber = o.OrderNumber,
+                OrderNumber = ResolveDisplayOrderNumber(o.PosterIncomingOrderId, o.PosterTransactionId, o.OrderNumber),
                 Status = MapStatus(o.Status),
                 PosterIncomingOrderId = o.PosterIncomingOrderId,
                 PosterTransactionId = o.PosterTransactionId,
@@ -170,7 +170,7 @@ public sealed class ClientOrdersController : ControllerBase
                 cancelled = false,
                 status = order.Status.ToString().ToLowerInvariant(),
                 orderId = order.Id,
-                orderNumber = order.OrderNumber
+                orderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber)
             });
         }
 
@@ -191,7 +191,7 @@ public sealed class ClientOrdersController : ControllerBase
             cancelled = true,
             status = order.Status.ToString().ToLowerInvariant(),
             orderId = order.Id,
-            orderNumber = order.OrderNumber
+            orderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber)
         });
     }
 
@@ -279,7 +279,7 @@ public sealed class ClientOrdersController : ControllerBase
         {
             updated = true,
             orderId = order.Id,
-            orderNumber = order.OrderNumber,
+            orderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber),
             language = normalizedLanguage
         });
     }
@@ -328,7 +328,7 @@ public sealed class ClientOrdersController : ControllerBase
             .Select(o => new OrderStatusDto
             {
                 Id = o.Id,
-                OrderNumber = o.OrderNumber,
+                OrderNumber = ResolveDisplayOrderNumber(o.PosterIncomingOrderId, o.PosterTransactionId, o.OrderNumber),
                 Status = MapStatus(o.Status),
                 PosterIncomingOrderId = o.PosterIncomingOrderId,
                 PosterTransactionId = o.PosterTransactionId,
@@ -383,6 +383,21 @@ public sealed class ClientOrdersController : ControllerBase
 
         var trimmed = language.Trim().ToLowerInvariant();
         return NotificationService.IsLanguageSupported(trimmed) ? trimmed : null;
+    }
+
+    private static string ResolveDisplayOrderNumber(string? posterIncomingOrderId, string? posterTransactionId, string orderNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
+        {
+            return posterIncomingOrderId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posterTransactionId))
+        {
+            return posterTransactionId;
+        }
+
+        return orderNumber;
     }
 
     private static string MapStatus(OrderStatus status) => status switch
@@ -468,7 +483,7 @@ public sealed class ClientOrdersController : ControllerBase
         return new OrderResponse
         {
             Id = order.Id,
-            OrderNumber = order.OrderNumber,
+            OrderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber),
             Date = order.Date,
             Items = items,
             Subtotal = order.Subtotal,
