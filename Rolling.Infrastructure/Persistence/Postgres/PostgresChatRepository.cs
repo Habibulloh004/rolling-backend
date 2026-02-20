@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Abstractions.Persistence;
 using Rolling.Domain.Chat;
@@ -151,26 +153,70 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         var orders = await _dbContext.Orders
             .AsNoTracking()
             .Where(o => orderIds.Contains(o.Id))
-            .Select(o => new
-            {
+            .Select(o => new OrderThreadProjection(
                 o.Id,
                 o.OrderNumber,
                 o.PosterIncomingOrderId,
                 o.PosterTransactionId,
-                Status = (int)o.Status,
+                (int)o.Status,
                 o.FirstName,
-                o.LastName
-            })
+                o.LastName))
             .ToListAsync(cancellationToken);
 
         var lastMessageByThreadId = lastMessages.ToDictionary(m => m.ThreadId, m => m, EqualityComparer<Guid>.Default);
-        var orderById = orders.ToDictionary(o => o.Id, o => o, StringComparer.Ordinal);
+        var orderByThreadOrderId = new Dictionary<Guid, OrderThreadProjection>();
+        foreach (var order in orders)
+        {
+            if (TryResolveThreadOrderId(order.Id, out var threadOrderId) &&
+                !orderByThreadOrderId.ContainsKey(threadOrderId))
+            {
+                orderByThreadOrderId[threadOrderId] = order;
+            }
+        }
+
+        var unresolvedThreadOrderIds = threads
+            .Select(t => t.OrderId)
+            .Where(orderId => !orderByThreadOrderId.ContainsKey(orderId))
+            .Distinct()
+            .ToArray();
+
+        if (unresolvedThreadOrderIds.Length > 0)
+        {
+            var minThreadCreatedAt = threads.Min(t => t.CreatedAt).UtcDateTime.AddDays(-30);
+            var maxThreadCreatedAt = threads.Max(t => t.CreatedAt).UtcDateTime.AddDays(30);
+
+            var candidateOrders = await _dbContext.Orders
+                .AsNoTracking()
+                .Where(o => o.CreatedAt >= minThreadCreatedAt && o.CreatedAt <= maxThreadCreatedAt)
+                .Select(o => new OrderThreadProjection(
+                    o.Id,
+                    o.OrderNumber,
+                    o.PosterIncomingOrderId,
+                    o.PosterTransactionId,
+                    (int)o.Status,
+                    o.FirstName,
+                    o.LastName))
+                .ToListAsync(cancellationToken);
+
+            var unresolvedSet = unresolvedThreadOrderIds.ToHashSet();
+            foreach (var order in candidateOrders)
+            {
+                if (!TryResolveThreadOrderId(order.Id, out var threadOrderId) ||
+                    !unresolvedSet.Contains(threadOrderId) ||
+                    orderByThreadOrderId.ContainsKey(threadOrderId))
+                {
+                    continue;
+                }
+
+                orderByThreadOrderId[threadOrderId] = order;
+            }
+        }
 
         var result = new List<(ChatThread Thread, ChatMessage? LastMessage, string? OrderNumber, int? OrderStatus, string? OrderCustomerName)>(threads.Count);
         foreach (var thread in threads)
         {
             lastMessageByThreadId.TryGetValue(thread.Id, out var lastMessage);
-            orderById.TryGetValue(thread.OrderId.ToString(), out var order);
+            orderByThreadOrderId.TryGetValue(thread.OrderId, out var order);
 
             var displayOrderNumber = ResolveDisplayOrderNumber(
                 order?.PosterIncomingOrderId,
@@ -210,6 +256,34 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
 
         return orderNumber;
     }
+
+    private static bool TryResolveThreadOrderId(string orderId, out Guid threadOrderId)
+    {
+        threadOrderId = Guid.Empty;
+        if (string.IsNullOrWhiteSpace(orderId))
+        {
+            return false;
+        }
+
+        if (Guid.TryParse(orderId.Trim(), out var parsed))
+        {
+            threadOrderId = parsed;
+            return true;
+        }
+
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(orderId.Trim()));
+        threadOrderId = new Guid(hash, bigEndian: true);
+        return true;
+    }
+
+    private sealed record OrderThreadProjection(
+        string Id,
+        string? OrderNumber,
+        string? PosterIncomingOrderId,
+        string? PosterTransactionId,
+        int Status,
+        string? FirstName,
+        string? LastName);
 
     public async Task<IReadOnlyDictionary<Guid, int>> GetUnreadCountsAsync(
         IReadOnlyCollection<Guid> threadIds,
