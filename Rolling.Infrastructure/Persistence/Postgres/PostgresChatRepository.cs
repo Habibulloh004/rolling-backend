@@ -162,6 +162,7 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                 o.UserId,
                 (int)o.Status,
                 o.CreatedAt,
+                o.Phone,
                 o.FirstName,
                 o.LastName))
             .ToListAsync(cancellationToken);
@@ -193,6 +194,7 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                     o.UserId,
                     (int)o.Status,
                     o.CreatedAt,
+                    o.Phone,
                     o.FirstName,
                     o.LastName))
                 .ToListAsync(cancellationToken);
@@ -273,6 +275,115 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
 
                     foreach (var thread in stillUnresolvedThreads)
                     {
+                        var customerDisplayName = thread.Participants
+                            .FirstOrDefault(participant => participant.Role == ChatParticipantRole.Customer)
+                            ?.DisplayName;
+                        var customerPhone = NormalizePhone(customerDisplayName);
+                        if (string.IsNullOrWhiteSpace(customerPhone))
+                        {
+                            continue;
+                        }
+
+                        var phoneMatchedOrder = allCandidateOrders
+                            .Where(order => !usedOrderIds.Contains(order.Id))
+                            .Select(order => new
+                            {
+                                Order = order,
+                                Phone = NormalizePhone(order.Phone),
+                                DistanceMinutes = Math.Abs((order.CreatedAt - thread.CreatedAt.UtcDateTime).TotalMinutes)
+                            })
+                            .Where(item => !string.IsNullOrWhiteSpace(item.Phone) &&
+                                           string.Equals(item.Phone, customerPhone, StringComparison.Ordinal) &&
+                                           item.DistanceMinutes <= 24 * 60)
+                            .OrderBy(item => item.DistanceMinutes)
+                            .Select(item => item.Order)
+                            .FirstOrDefault();
+
+                        if (phoneMatchedOrder is null)
+                        {
+                            continue;
+                        }
+
+                        orderByThreadOrderId[thread.OrderId] = phoneMatchedOrder;
+                        usedOrderIds.Add(phoneMatchedOrder.Id);
+                    }
+
+                    stillUnresolvedThreads = stillUnresolvedThreads
+                        .Where(thread => !orderByThreadOrderId.ContainsKey(thread.OrderId))
+                        .OrderBy(thread => thread.CreatedAt)
+                        .ToList();
+
+                    var unresolvedThreadsByName = stillUnresolvedThreads
+                        .Select(thread => new
+                        {
+                            Thread = thread,
+                            Name = NormalizePersonName(
+                                thread.Participants
+                                    .FirstOrDefault(participant => participant.Role == ChatParticipantRole.Customer)
+                                    ?.DisplayName)
+                        })
+                        .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+                        .GroupBy(item => item.Name!, StringComparer.Ordinal);
+
+                    var availableOrdersByName = allCandidateOrders
+                        .Where(order => !usedOrderIds.Contains(order.Id))
+                        .Select(order => new
+                        {
+                            Order = order,
+                            Name = NormalizePersonName(BuildCustomerName(order.FirstName, order.LastName))
+                        })
+                        .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+                        .GroupBy(item => item.Name!, item => item.Order, StringComparer.Ordinal)
+                        .ToDictionary(
+                            group => group.Key,
+                            group => group.OrderBy(order => order.CreatedAt).ToList(),
+                            StringComparer.Ordinal);
+
+                    foreach (var group in unresolvedThreadsByName)
+                    {
+                        if (!availableOrdersByName.TryGetValue(group.Key, out var candidates) || candidates.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        var threadsForName = group
+                            .Select(item => item.Thread)
+                            .OrderBy(thread => thread.CreatedAt)
+                            .ToList();
+
+                        foreach (var thread in threadsForName)
+                        {
+                            if (candidates.Count == 0)
+                            {
+                                break;
+                            }
+
+                            var bestIndex = -1;
+                            var bestDistance = double.MaxValue;
+                            for (var i = 0; i < candidates.Count; i++)
+                            {
+                                var distance = Math.Abs((candidates[i].CreatedAt - thread.CreatedAt.UtcDateTime).TotalMinutes);
+                                if (distance < bestDistance)
+                                {
+                                    bestDistance = distance;
+                                    bestIndex = i;
+                                }
+                            }
+
+                            if (bestIndex < 0 || bestDistance > 24 * 60)
+                            {
+                                continue;
+                            }
+
+                            var chosen = candidates[bestIndex];
+                            candidates.RemoveAt(bestIndex);
+                            orderByThreadOrderId[thread.OrderId] = chosen;
+                            usedOrderIds.Add(chosen.Id);
+                        }
+                    }
+
+                    foreach (var thread in stillUnresolvedThreads)
+                    {
                         var threadName = NormalizePersonName(
                             thread.Participants
                                 .FirstOrDefault(participant => participant.Role == ChatParticipantRole.Customer)
@@ -302,11 +413,6 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                             .ToList();
 
                         if (nameMatched.Count == 0)
-                        {
-                            continue;
-                        }
-
-                        if (nameMatched.Count > 1 && nameMatched[0].DistanceMinutes + 20 >= nameMatched[1].DistanceMinutes)
                         {
                             continue;
                         }
@@ -439,6 +545,22 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         return collapsed.ToLowerInvariant();
     }
 
+    private static string? NormalizePhone(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        if (digits.Length < 10)
+        {
+            return null;
+        }
+
+        return digits;
+    }
+
     private static bool TryResolveThreadOrderId(string? orderId, out Guid threadOrderId)
     {
         threadOrderId = Guid.Empty;
@@ -467,6 +589,7 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         string? UserId,
         int Status,
         DateTime CreatedAt,
+        string? Phone,
         string? FirstName,
         string? LastName);
 
