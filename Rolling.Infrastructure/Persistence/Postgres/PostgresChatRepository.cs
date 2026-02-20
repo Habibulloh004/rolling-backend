@@ -158,21 +158,17 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                 o.OrderNumber,
                 o.PosterIncomingOrderId,
                 o.PosterTransactionId,
+                o.PaymentTransactionId,
+                o.UserId,
                 (int)o.Status,
+                o.CreatedAt,
                 o.FirstName,
                 o.LastName))
             .ToListAsync(cancellationToken);
 
         var lastMessageByThreadId = lastMessages.ToDictionary(m => m.ThreadId, m => m, EqualityComparer<Guid>.Default);
         var orderByThreadOrderId = new Dictionary<Guid, OrderThreadProjection>();
-        foreach (var order in orders)
-        {
-            if (TryResolveThreadOrderId(order.Id, out var threadOrderId) &&
-                !orderByThreadOrderId.ContainsKey(threadOrderId))
-            {
-                orderByThreadOrderId[threadOrderId] = order;
-            }
-        }
+        AddOrderCandidates(orders, orderByThreadOrderId, null);
 
         var unresolvedThreadOrderIds = threads
             .Select(t => t.OrderId)
@@ -193,22 +189,76 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                     o.OrderNumber,
                     o.PosterIncomingOrderId,
                     o.PosterTransactionId,
+                    o.PaymentTransactionId,
+                    o.UserId,
                     (int)o.Status,
+                    o.CreatedAt,
                     o.FirstName,
                     o.LastName))
                 .ToListAsync(cancellationToken);
 
             var unresolvedSet = unresolvedThreadOrderIds.ToHashSet();
-            foreach (var order in candidateOrders)
+            AddOrderCandidates(candidateOrders, orderByThreadOrderId, unresolvedSet);
+
+            var unresolvedThreads = threads
+                .Where(thread => unresolvedSet.Contains(thread.OrderId) && !orderByThreadOrderId.ContainsKey(thread.OrderId))
+                .ToList();
+
+            if (unresolvedThreads.Count > 0)
             {
-                if (!TryResolveThreadOrderId(order.Id, out var threadOrderId) ||
-                    !unresolvedSet.Contains(threadOrderId) ||
-                    orderByThreadOrderId.ContainsKey(threadOrderId))
+                var allCandidateOrders = orders
+                    .Concat(candidateOrders)
+                    .GroupBy(order => order.Id, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .ToList();
+
+                var ordersByCustomerId = new Dictionary<Guid, List<OrderThreadProjection>>();
+                foreach (var order in allCandidateOrders)
                 {
-                    continue;
+                    if (!TryResolveThreadOrderId(order.UserId, out var customerId))
+                    {
+                        continue;
+                    }
+
+                    if (!ordersByCustomerId.TryGetValue(customerId, out var items))
+                    {
+                        items = new List<OrderThreadProjection>();
+                        ordersByCustomerId[customerId] = items;
+                    }
+
+                    items.Add(order);
                 }
 
-                orderByThreadOrderId[threadOrderId] = order;
+                foreach (var thread in unresolvedThreads)
+                {
+                    if (!ordersByCustomerId.TryGetValue(thread.CustomerId, out var customerOrders) || customerOrders.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var ranked = customerOrders
+                        .Select(order => new
+                        {
+                            Order = order,
+                            DistanceMinutes = Math.Abs((order.CreatedAt - thread.CreatedAt.UtcDateTime).TotalMinutes)
+                        })
+                        .Where(item => item.DistanceMinutes <= 24 * 60)
+                        .OrderBy(item => item.DistanceMinutes)
+                        .Take(2)
+                        .ToList();
+
+                    if (ranked.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    if (ranked.Count > 1 && ranked[0].DistanceMinutes + 30 >= ranked[1].DistanceMinutes)
+                    {
+                        continue;
+                    }
+
+                    orderByThreadOrderId[thread.OrderId] = ranked[0].Order;
+                }
             }
         }
 
@@ -257,7 +307,68 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         return orderNumber;
     }
 
-    private static bool TryResolveThreadOrderId(string orderId, out Guid threadOrderId)
+    private static void AddOrderCandidates(
+        IEnumerable<OrderThreadProjection> orders,
+        IDictionary<Guid, OrderThreadProjection> orderByThreadOrderId,
+        ISet<Guid>? filter)
+    {
+        foreach (var order in orders)
+        {
+            foreach (var candidateId in BuildThreadOrderCandidates(order))
+            {
+                if (filter is not null && !filter.Contains(candidateId))
+                {
+                    continue;
+                }
+
+                if (!orderByThreadOrderId.ContainsKey(candidateId))
+                {
+                    orderByThreadOrderId[candidateId] = order;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<Guid> BuildThreadOrderCandidates(OrderThreadProjection order)
+    {
+        var identifiers = new[]
+        {
+            order.Id,
+            NormalizeOrderIdentifier(order.OrderNumber),
+            order.PosterIncomingOrderId,
+            order.PosterTransactionId,
+            order.PaymentTransactionId
+        };
+
+        var seen = new HashSet<Guid>();
+        foreach (var identifier in identifiers)
+        {
+            if (!TryResolveThreadOrderId(identifier, out var candidateId) || !seen.Add(candidateId))
+            {
+                continue;
+            }
+
+            yield return candidateId;
+        }
+    }
+
+    private static string? NormalizeOrderIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.StartsWith("#", StringComparison.Ordinal))
+        {
+            normalized = normalized[1..];
+        }
+
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static bool TryResolveThreadOrderId(string? orderId, out Guid threadOrderId)
     {
         threadOrderId = Guid.Empty;
         if (string.IsNullOrWhiteSpace(orderId))
@@ -281,7 +392,10 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
         string? OrderNumber,
         string? PosterIncomingOrderId,
         string? PosterTransactionId,
+        string? PaymentTransactionId,
+        string? UserId,
         int Status,
+        DateTime CreatedAt,
         string? FirstName,
         string? LastName);
 
