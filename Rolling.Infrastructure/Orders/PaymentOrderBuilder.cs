@@ -520,10 +520,10 @@ internal static class PaymentOrderBuilder
         string fallback)
     {
         return FirstNonEmpty(
-                   posterIncomingOrderId,
                    posterTransactionId,
-                   existingPosterIncomingOrderId,
-                   existingPosterTransactionId)
+                   posterIncomingOrderId,
+                   existingPosterTransactionId,
+                   existingPosterIncomingOrderId)
                ?? fallback;
     }
 
