@@ -29,6 +29,20 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
                           thread.CustomerId == customerId,
                 cancellationToken);
 
+        if (entity is not null)
+        {
+            return entity.ToDomain();
+        }
+
+        // Fallback: if customer identity derivation differs between clients,
+        // reuse the latest thread for the same tenant/order instead of creating a duplicate thread.
+        entity = await _dbContext.ChatThreads
+            .Include(thread => thread.Participants)
+            .AsNoTracking()
+            .Where(thread => thread.TenantId == tenantId && thread.OrderId == orderId)
+            .OrderByDescending(thread => thread.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
         return entity?.ToDomain();
     }
 
