@@ -84,7 +84,7 @@ public sealed class AdminOrdersController : ControllerBase
             .Select(o => new
             {
                 o.Id,
-                OrderNumber = o.PosterIncomingOrderId ?? o.PosterTransactionId ?? o.OrderNumber,
+                OrderNumber = o.PosterTransactionId ?? o.PosterIncomingOrderId ?? o.OrderNumber,
                 o.Date,
                 o.Subtotal,
                 o.DeliveryFee,
@@ -236,14 +236,14 @@ public sealed class AdminOrdersController : ControllerBase
 
     private static string ResolveDisplayOrderNumber(string? posterIncomingOrderId, string? posterTransactionId, string orderNumber)
     {
-        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
-        {
-            return posterIncomingOrderId;
-        }
-
         if (!string.IsNullOrWhiteSpace(posterTransactionId))
         {
             return posterTransactionId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
+        {
+            return posterIncomingOrderId;
         }
 
         return orderNumber;

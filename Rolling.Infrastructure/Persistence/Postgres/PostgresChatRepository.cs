@@ -457,14 +457,14 @@ public sealed class PostgresChatRepository : IChatThreadRepository, IChatMessage
 
     private static string? ResolveDisplayOrderNumber(string? posterIncomingOrderId, string? posterTransactionId, string? orderNumber)
     {
-        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
-        {
-            return posterIncomingOrderId;
-        }
-
         if (!string.IsNullOrWhiteSpace(posterTransactionId))
         {
             return posterTransactionId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posterIncomingOrderId))
+        {
+            return posterIncomingOrderId;
         }
 
         return orderNumber;
