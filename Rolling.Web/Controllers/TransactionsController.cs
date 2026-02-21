@@ -79,6 +79,26 @@ public sealed class TransactionsController : ControllerBase
             }
         }
 
+        var linkedOrder = await _dbContext.Orders
+            .AsNoTracking()
+            .Where(order =>
+                order.PaymentTransactionId == transaction.Id ||
+                (!string.IsNullOrWhiteSpace(transaction.TransactionId) && order.PaymentTransactionId == transaction.TransactionId) ||
+                (!string.IsNullOrWhiteSpace(transaction.OrderId) && (
+                    order.Id == transaction.OrderId ||
+                    order.OrderNumber == transaction.OrderId ||
+                    order.PosterTransactionId == transaction.OrderId ||
+                    order.PosterIncomingOrderId == transaction.OrderId)))
+            .OrderByDescending(order => order.UpdatedAt)
+            .Select(order => new
+            {
+                order.Id,
+                order.OrderNumber,
+                order.PosterIncomingOrderId,
+                order.PosterTransactionId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return Ok(new
         {
             transaction.Id,
@@ -94,6 +114,10 @@ public sealed class TransactionsController : ControllerBase
             transaction.Reason,
             transaction.Provider,
             transaction.PrepareId,
+            BackendOrderId = linkedOrder?.Id,
+            LinkedOrderNumber = linkedOrder?.OrderNumber,
+            PosterIncomingOrderId = linkedOrder?.PosterIncomingOrderId,
+            PosterTransactionId = linkedOrder?.PosterTransactionId,
             transaction.CreatedAt,
             transaction.UpdatedAt
         });
