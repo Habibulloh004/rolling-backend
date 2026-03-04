@@ -65,7 +65,6 @@ builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
 builder.Services.AddSingleton<IWebhookMessageStore, InMemoryWebhookMessageStore>();
 builder.Services.AddScoped<PosterTransactionWebhookHandler>();
-builder.Services.AddScoped<PosterClientCommentLengthService>();
 builder.Services.AddHttpClient<EskizSmsClient>((sp, client) =>
 {
     var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<SmsOptions>>();
