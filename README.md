@@ -5,9 +5,26 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project Rolling.Web/Rolling.Web.
 ASPNETCORE_ENVIRONMENT=Development dotnet watch --project rolling-back/Rolling.Web/Rolling.Web.csproj
 
 
-open "/Users/habibulloh1209mail.ru/Desktop/pr/rolling-combine/rolling-ios/White Lebel.xcodeproj"
+open "/Users/habibulloh1209mail.ru/Documents/Projects/full-combine/rolling-combine/rolling-ios/White Lebel.xcodeproj"
 
 some changes
+
+## Run Android Emulator + `rolling-android`
+
+SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"
+AVD=$("$SDK/emulator/emulator" -list-avds | head -n 1)
+
+if [ -z "$AVD" ]; then
+  echo "No Android AVD found. Create one in Android Studio > Device Manager."
+  exit 1
+fi
+
+"$SDK/emulator/emulator" -avd "$AVD" >/tmp/rolling-emulator.log 2>&1 &
+"$SDK/platform-tools/adb" wait-for-device
+
+cd rolling-android
+./gradlew installDebug
+"$SDK/platform-tools/adb" shell monkey -p com.abdurrahmonxoja.rollingsushi -c android.intent.category.LAUNCHER 1
 
 
 # Rolling

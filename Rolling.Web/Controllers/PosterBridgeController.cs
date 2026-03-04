@@ -183,28 +183,26 @@ public sealed class PosterBridgeController : ControllerBase
             ? null
             : SanitizePosterPhoneNumber(request.AlternatePhone);
 
-        // Build Poster-compatible payload with snake_case keys (exclude fields Poster doesn't understand like fcmToken)
+        // Build Poster-compatible payload with only fields that should reach Poster.
         var posterPayload = new Dictionary<string, object?>
         {
             ["spot_id"] = request.SpotId,
             ["phone"] = sanitizedPhone,
-            ["alternate_phone"] = sanitizedAlternatePhone,
             ["first_name"] = string.IsNullOrWhiteSpace(request.FirstName) ? null : request.FirstName.Trim()[..Math.Min(60, request.FirstName.Trim().Length)],
             ["last_name"] = string.IsNullOrWhiteSpace(request.LastName) ? null : request.LastName.Trim()[..Math.Min(60, request.LastName.Trim().Length)],
             ["address"] = normalizedAddress,
             ["comment"] = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim(),
             // Poster expects delivery_price in minor units (x100), same as iOS implementation.
             ["delivery_price"] = normalizedDeliveryPrice > 0m ? (long)Math.Round(normalizedDeliveryPrice * 100m) : null,
-            ["payment_method_id"] = string.IsNullOrWhiteSpace(request.PaymentMethodId) ? null : request.PaymentMethodId,
+            ["bonus"] = request.LoyaltyPointsUsed.HasValue && request.LoyaltyPointsUsed.Value > 0m
+                ? (long)Math.Round(request.LoyaltyPointsUsed.Value * 100m)
+                : null,
             ["service_mode"] = normalizedServiceMode,
             ["products"] = request.Products.Select(p => new Dictionary<string, object?>
             {
                 ["product_id"] = p.ProductId,
                 ["count"] = p.Count,
-                ["modificator_id"] = string.IsNullOrWhiteSpace(p.ModificatorId) ? null : p.ModificatorId,
-                // Match iOS: send price only when overriding (promo items), and in minor units (x100).
-                ["price"] = p.PriceOverride.HasValue ? (long)Math.Round(p.PriceOverride.Value * 100m) : null,
-                ["is_gift"] = p.IsGift
+                ["modificator_id"] = string.IsNullOrWhiteSpace(p.ModificatorId) ? null : p.ModificatorId
             }).ToList(),
             ["promotions"] = request.Promotions?.Select(promo => new Dictionary<string, object?>
             {

@@ -129,7 +129,7 @@ public sealed class PosterService
 
     public async Task<JsonDocument?> CreateIncomingOrderAsync(JsonElement payload, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("CreateIncomingOrderAsync - Input JSON payload: {Payload}", payload.GetRawText());
+        _logger.LogInformation("CreateIncomingOrderAsync - Preparing incoming order payload");
 
         // Poster API expects form-urlencoded data, not JSON
         var formData = ConvertJsonToFormData(payload);
@@ -149,7 +149,7 @@ public sealed class PosterService
 
     public async Task<PosterApiCallResult?> CreateIncomingOrderDetailedAsync(JsonElement payload, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("CreateIncomingOrderDetailedAsync - Input JSON payload: {Payload}", payload.GetRawText());
+        _logger.LogInformation("CreateIncomingOrderDetailedAsync - Preparing incoming order payload");
 
         var formData = ConvertJsonToFormData(payload);
 
@@ -177,6 +177,50 @@ public sealed class PosterService
         };
     }
 
+    private static bool TryGetDecimalValue(JsonElement element, out decimal value)
+    {
+        value = 0m;
+
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetDecimal(out var numeric))
+        {
+            value = numeric;
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.String &&
+            decimal.TryParse(element.GetString(), out var parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static long ToMinorUnits(decimal amount) =>
+        (long)Math.Round(amount * 100m, MidpointRounding.AwayFromZero);
+
+    private static bool TryGetLoyaltyPointsMajorUnits(JsonElement payload, out decimal value)
+    {
+        value = 0m;
+
+        if (payload.TryGetProperty("loyalty_points_used", out var loyaltyPointsUsed) &&
+            TryGetDecimalValue(loyaltyPointsUsed, out value) &&
+            value > 0m)
+        {
+            return true;
+        }
+
+        if (payload.TryGetProperty("loyaltyPointsUsed", out loyaltyPointsUsed) &&
+            TryGetDecimalValue(loyaltyPointsUsed, out value) &&
+            value > 0m)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static List<KeyValuePair<string, string>> ConvertJsonToFormData(JsonElement payload)
     {
         var formData = new List<KeyValuePair<string, string>>();
@@ -186,9 +230,6 @@ public sealed class PosterService
 
         if (payload.TryGetProperty("phone", out var phone))
             formData.Add(new("phone", phone.GetString() ?? ""));
-
-        if (payload.TryGetProperty("alternate_phone", out var altPhone) && altPhone.ValueKind == JsonValueKind.String)
-            formData.Add(new("phone_additional", altPhone.GetString() ?? ""));
 
         if (payload.TryGetProperty("first_name", out var firstName) && firstName.ValueKind == JsonValueKind.String)
             formData.Add(new("first_name", firstName.GetString() ?? ""));
@@ -202,35 +243,47 @@ public sealed class PosterService
         if (payload.TryGetProperty("comment", out var comment) && comment.ValueKind == JsonValueKind.String)
             formData.Add(new("comment", comment.GetString() ?? ""));
 
-        if (payload.TryGetProperty("delivery_price", out var deliveryPrice))
+        if (payload.TryGetProperty("bonus", out var bonus) &&
+            TryGetDecimalValue(bonus, out var bonusMinorUnits) &&
+            bonusMinorUnits > 0m)
         {
-            if (deliveryPrice.ValueKind == JsonValueKind.Number && deliveryPrice.TryGetInt64(out var numeric))
-            {
-                formData.Add(new("delivery_price", numeric.ToString()));
-            }
-            else if (deliveryPrice.ValueKind == JsonValueKind.String && long.TryParse(deliveryPrice.GetString(), out var parsed))
-            {
-                formData.Add(new("delivery_price", parsed.ToString()));
-            }
+            // "bonus" is expected in minor units by Poster.
+            formData.Add(new("bonus", ((long)Math.Round(bonusMinorUnits, MidpointRounding.AwayFromZero)).ToString()));
+        }
+        else if (TryGetLoyaltyPointsMajorUnits(payload, out var loyaltyMajorUnits))
+        {
+            // App payload keeps loyalty points in major units (UZS), Poster expects minor units.
+            formData.Add(new("bonus", ToMinorUnits(loyaltyMajorUnits).ToString()));
         }
 
-        if (payload.TryGetProperty("payment_method_id", out var paymentMethodId) && paymentMethodId.ValueKind == JsonValueKind.String)
-            formData.Add(new("payment_method_id", paymentMethodId.GetString() ?? ""));
-
+        var normalizedServiceMode = 3;
         if (payload.TryGetProperty("service_mode", out var serviceMode))
         {
             if (serviceMode.ValueKind == JsonValueKind.Number && serviceMode.TryGetInt32(out var numeric))
             {
-                formData.Add(new("service_mode", numeric.ToString()));
+                normalizedServiceMode = numeric;
             }
             else if (serviceMode.ValueKind == JsonValueKind.String && int.TryParse(serviceMode.GetString(), out var parsed))
             {
-                formData.Add(new("service_mode", parsed.ToString()));
+                normalizedServiceMode = parsed;
             }
         }
-        else
+
+        formData.Add(new("service_mode", normalizedServiceMode.ToString()));
+
+        // Delivery fee should be passed only for delivery orders.
+        if (normalizedServiceMode == 3 && payload.TryGetProperty("delivery_price", out var deliveryPrice))
         {
-            formData.Add(new("service_mode", "3")); // default to delivery
+            if (deliveryPrice.ValueKind == JsonValueKind.Number && deliveryPrice.TryGetInt64(out var numeric) && numeric > 0)
+            {
+                formData.Add(new("delivery_price", numeric.ToString()));
+            }
+            else if (deliveryPrice.ValueKind == JsonValueKind.String &&
+                     long.TryParse(deliveryPrice.GetString(), out var parsed) &&
+                     parsed > 0)
+            {
+                formData.Add(new("delivery_price", parsed.ToString()));
+            }
         }
 
         // Products array
@@ -251,25 +304,6 @@ public sealed class PosterService
                     if (!string.IsNullOrEmpty(modIdStr))
                         formData.Add(new($"products[{index}][modificator_id]", modIdStr));
                 }
-
-                // Check for price (direct) or price_override
-                if (product.TryGetProperty("price", out var productPrice) && productPrice.ValueKind == JsonValueKind.Number)
-                {
-                    if (productPrice.TryGetInt64(out var price))
-                    {
-                        formData.Add(new($"products[{index}][price]", price.ToString()));
-                    }
-                }
-                else if (product.TryGetProperty("price_override", out var priceOverride) && priceOverride.ValueKind == JsonValueKind.Number)
-                {
-                    if (priceOverride.TryGetInt64(out var price))
-                    {
-                        formData.Add(new($"products[{index}][price]", price.ToString()));
-                    }
-                }
-
-                if (product.TryGetProperty("is_gift", out var isGift) && isGift.GetBoolean())
-                    formData.Add(new($"products[{index}][is_gift]", "1"));
 
                 index++;
             }
