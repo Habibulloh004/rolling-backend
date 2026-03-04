@@ -195,6 +195,8 @@ public sealed class OrderProcessor
             return;
         }
 
+        await EnsureOrderCountForTelegramAsync(order, cancellationToken);
+
         var paymentDescription = TelegramOrderMessageBuilder.BuildPaymentDescription(order, provider);
         var orderSummary = TelegramOrderMessageBuilder.BuildOrderSummary(order, paymentDescription);
         var context = await TelegramOrderMessageBuilder.CreateContextAsync(
@@ -215,6 +217,185 @@ public sealed class OrderProcessor
                 "Failed to send Telegram new order message: OrderId={OrderId}, Provider={Provider}",
                 order.Id,
                 provider);
+        }
+    }
+
+    private async Task EnsureOrderCountForTelegramAsync(Order order, CancellationToken cancellationToken)
+    {
+        if (order.UserOrderCount is >= 0)
+        {
+            return;
+        }
+
+        var resolvedOrderCount = await TryResolvePosterClientOrderCountAsync(order, cancellationToken);
+        if (!resolvedOrderCount.HasValue)
+        {
+            return;
+        }
+
+        order.UserOrderCount = resolvedOrderCount.Value;
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to persist resolved order count before Telegram message: OrderId={OrderId}",
+                order.Id);
+        }
+    }
+
+    private async Task<int?> TryResolvePosterClientOrderCountAsync(Order order, CancellationToken cancellationToken)
+    {
+        var clientId = order.UserId?.Trim();
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var clientDocument = await _posterService.GetClientAsync(clientId, cancellationToken);
+            if (clientDocument is null || !TryExtractClient(clientDocument.RootElement, out var client))
+            {
+                return null;
+            }
+
+            var comment = client.TryGetProperty("comment", out var commentElement)
+                ? GetStringOrNumber(commentElement)
+                : null;
+
+            return TryParseOrderCountFromComment(comment);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to resolve client order count from Poster: OrderId={OrderId}, ClientId={ClientId}",
+                order.Id,
+                clientId);
+            return null;
+        }
+    }
+
+    private static bool TryExtractClient(JsonElement root, out JsonElement client)
+    {
+        client = default;
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (root.TryGetProperty("response", out var response))
+        {
+            if (response.ValueKind == JsonValueKind.Object)
+            {
+                client = response;
+                return true;
+            }
+
+            if (response.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in response.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        client = item;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if (root.TryGetProperty("client_id", out _))
+        {
+            client = root;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int? TryParseOrderCountFromComment(string? comment)
+    {
+        if (string.IsNullOrWhiteSpace(comment))
+        {
+            return null;
+        }
+
+        var trimmed = comment.Trim();
+        if (TryParseOrderCountFromJson(trimmed, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[^1] == '"')
+        {
+            try
+            {
+                var unescaped = JsonSerializer.Deserialize<string>(trimmed);
+                if (TryParseOrderCountFromJson(unescaped, out parsed))
+                {
+                    return parsed;
+                }
+            }
+            catch (JsonException)
+            {
+                // Ignore and continue.
+            }
+        }
+
+        var start = trimmed.IndexOf('{');
+        var end = trimmed.LastIndexOf('}');
+        if (start >= 0 && end > start)
+        {
+            var jsonObject = trimmed[start..(end + 1)];
+            if (TryParseOrderCountFromJson(jsonObject, out parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryParseOrderCountFromJson(string? json, out int orderCount)
+    {
+        orderCount = 0;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("length", out var lengthElement))
+            {
+                return false;
+            }
+
+            orderCount = lengthElement.ValueKind switch
+            {
+                JsonValueKind.Number when lengthElement.TryGetInt32(out var numeric) => numeric,
+                JsonValueKind.String when int.TryParse(lengthElement.GetString()?.Trim(), out var fromString) => fromString,
+                _ => 0
+            };
+
+            if (orderCount < 0)
+            {
+                orderCount = 0;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

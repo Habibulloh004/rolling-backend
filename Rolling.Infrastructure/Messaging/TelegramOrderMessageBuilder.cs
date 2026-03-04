@@ -149,10 +149,8 @@ public static class TelegramOrderMessageBuilder
             $"✏️ Комментарий: {context.OrderSummary}"
         };
 
-        if (context.OrdersCompleted.HasValue)
-        {
-            lines.Add($"📦 Количество заказов: {context.OrdersCompleted.Value}");
-        }
+        var ordersCompleted = Math.Max(context.OrdersCompleted ?? 0, 0);
+        lines.Add($"📦 Количество заказов: {ordersCompleted}");
 
         if (!string.IsNullOrWhiteSpace(context.PromoCode))
         {

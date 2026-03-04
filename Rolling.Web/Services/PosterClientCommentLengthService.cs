@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Poster;
 
@@ -9,16 +8,13 @@ namespace Rolling.Web.Services;
 public sealed class PosterClientCommentLengthService
 {
     private readonly PosterService _posterService;
-    private readonly TelegramService _telegramService;
     private readonly ILogger<PosterClientCommentLengthService> _logger;
 
     public PosterClientCommentLengthService(
         PosterService posterService,
-        TelegramService telegramService,
         ILogger<PosterClientCommentLengthService> logger)
     {
         _posterService = posterService;
-        _telegramService = telegramService;
         _logger = logger;
     }
 
@@ -81,16 +77,6 @@ public sealed class PosterClientCommentLengthService
                 oldMetadata.Length,
                 newLength,
                 source);
-
-            await TrySendTelegramAsync(
-                order,
-                clientId,
-                source,
-                oldMetadata.Length,
-                newLength,
-                oldComment,
-                newComment,
-                cancellationToken);
         }
         catch (Exception ex)
         {
@@ -100,58 +86,6 @@ public sealed class PosterClientCommentLengthService
                 order.Id,
                 source);
         }
-    }
-
-    private async Task TrySendTelegramAsync(
-        Order order,
-        string clientId,
-        string source,
-        int oldLength,
-        int newLength,
-        string oldComment,
-        string newComment,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var orderNumber = string.IsNullOrWhiteSpace(order.OrderNumber) ? order.Id : order.OrderNumber;
-            var displayOrderNumber = orderNumber.StartsWith("#", StringComparison.Ordinal) ? orderNumber : $"#{orderNumber}";
-            var mode = order.ServiceMode == 2 ? "taken (pickup)" : "delivered";
-
-            var message = $"""
-✅ Poster client comment updated
-Source: {source}
-Order: {displayOrderNumber}
-OrderId: {order.Id}
-ClientId: {clientId}
-Phone: {DisplayValue(order.Phone)}
-Status: {mode}
-Length: {oldLength} -> {newLength}
-Comment before: {DisplayValue(oldComment)}
-Comment after: {DisplayValue(newComment)}
-""".Trim();
-
-            await _telegramService.SendMessageAsync(message, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to send Telegram message for Poster client comment length update: OrderId={OrderId}, ClientId={ClientId}, Source={Source}",
-                order.Id,
-                clientId,
-                source);
-        }
-    }
-
-    private static string DisplayValue(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "<empty>";
-        }
-
-        return value.Trim();
     }
 
     private static bool TryExtractClient(JsonElement root, out JsonElement client)
