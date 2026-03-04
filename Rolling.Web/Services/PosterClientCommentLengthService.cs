@@ -55,8 +55,22 @@ public sealed class PosterClientCommentLengthService
 
             var oldComment = GetPropertyValue(client, "comment") ?? string.Empty;
             var oldMetadata = ParseCommentMetadata(oldComment);
+            if (string.Equals(oldMetadata.LastOrderId, order.Id, StringComparison.Ordinal))
+            {
+                _logger.LogInformation(
+                    "Poster client comment length increment skipped - already processed for order: OrderId={OrderId}, ClientId={ClientId}, Source={Source}",
+                    order.Id,
+                    clientId,
+                    source);
+                return;
+            }
+
             var newLength = oldMetadata.Length == int.MaxValue ? int.MaxValue : oldMetadata.Length + 1;
-            var newMetadata = oldMetadata with { Length = newLength };
+            var newMetadata = oldMetadata with
+            {
+                Length = newLength,
+                LastOrderId = order.Id
+            };
             var newComment = BuildCommentJson(newMetadata);
 
             using var updateDocument = await _posterService.UpdateClientCommentAsync(clientId, newComment, cancellationToken);
@@ -202,7 +216,8 @@ public sealed class PosterClientCommentLengthService
             var root = document.RootElement;
             var password = GetPropertyValue(root, "password");
             var length = ParseLength(root);
-            metadata = new CommentMetadata(password, length);
+            var lastOrderId = GetPropertyValue(root, "last_order_id");
+            metadata = new CommentMetadata(password, length, lastOrderId);
             return true;
         }
         catch (JsonException)
@@ -244,11 +259,16 @@ public sealed class PosterClientCommentLengthService
             payload["password"] = metadata.Password.Trim();
         }
 
+        if (!string.IsNullOrWhiteSpace(metadata.LastOrderId))
+        {
+            payload["last_order_id"] = metadata.LastOrderId.Trim();
+        }
+
         return JsonSerializer.Serialize(payload);
     }
 
-    private sealed record CommentMetadata(string? Password, int Length)
+    private sealed record CommentMetadata(string? Password, int Length, string? LastOrderId)
     {
-        public static CommentMetadata Empty { get; } = new(null, 0);
+        public static CommentMetadata Empty { get; } = new(null, 0, null);
     }
 }
