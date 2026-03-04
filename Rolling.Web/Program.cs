@@ -11,6 +11,7 @@ using Rolling.Web.Middleware;
 using Rolling.Web.Realtime;
 using Rolling.Web.HostedServices;
 using Rolling.Web.Models.Sms;
+using Rolling.Web.Services;
 using Rolling.Web.Services.Sms;
 using Rolling.Web.Services.Webhooks;
 using Rolling.Web.Auth;
@@ -64,6 +65,7 @@ builder.Services.AddSingleton<RouteUsageStore>();
 builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
 builder.Services.AddSingleton<IWebhookMessageStore, InMemoryWebhookMessageStore>();
 builder.Services.AddScoped<PosterTransactionWebhookHandler>();
+builder.Services.AddScoped<PosterClientCommentLengthService>();
 builder.Services.AddHttpClient<EskizSmsClient>((sp, client) =>
 {
     var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<SmsOptions>>();

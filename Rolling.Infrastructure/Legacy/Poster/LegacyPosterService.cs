@@ -389,6 +389,45 @@ public sealed class PosterService
         return SendPosterRequestAsync("clients.createClient", null, content, cancellationToken);
     }
 
+    public Task<JsonDocument?> UpdateClientAsync(
+        IDictionary<string, string?> fields,
+        CancellationToken cancellationToken)
+    {
+        var formData = fields
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            .Select(pair => new KeyValuePair<string, string>(pair.Key, pair.Value!.Trim()))
+            .ToList();
+
+        if (formData.Count == 0)
+        {
+            _logger.LogWarning("Poster updateClient skipped - no fields provided");
+            return Task.FromResult<JsonDocument?>(null);
+        }
+
+        var content = new FormUrlEncodedContent(formData);
+        return SendPosterRequestAsync("clients.updateClient", null, content, cancellationToken);
+    }
+
+    public Task<JsonDocument?> UpdateClientCommentAsync(
+        string clientId,
+        string comment,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            _logger.LogWarning("Poster updateClient comment skipped - empty clientId");
+            return Task.FromResult<JsonDocument?>(null);
+        }
+
+        var fields = new Dictionary<string, string?>
+        {
+            ["client_id"] = clientId.Trim(),
+            ["comment"] = comment
+        };
+
+        return UpdateClientAsync(fields, cancellationToken);
+    }
+
     public Task<JsonDocument?> GetProductsAsync(CancellationToken cancellationToken) =>
         SendPosterRequestAsync("menu.getProducts", null, null, cancellationToken);
 

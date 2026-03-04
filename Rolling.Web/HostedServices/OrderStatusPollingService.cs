@@ -11,6 +11,7 @@ using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
 using Rolling.Infrastructure.Persistence.Postgres.Entities;
 using Rolling.Infrastructure.Poster;
+using Rolling.Web.Services;
 
 namespace Rolling.Web.HostedServices;
 
@@ -110,6 +111,7 @@ public sealed class OrderStatusPollingService : BackgroundService
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
+        var posterClientCommentLengthService = scope.ServiceProvider.GetRequiredService<PosterClientCommentLengthService>();
 
         var now = DateTime.UtcNow;
         PruneTrackedOrders(now);
@@ -289,6 +291,14 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     updatedDbCount++;
                     UpdateTrackedOrderStatus(order.OrderId, posterStatus.Value);
+
+                    if (posterStatus.Value == OrderStatus.Delivered)
+                    {
+                        await posterClientCommentLengthService.TryIncrementLengthAsync(
+                            updatedOrder,
+                            "polling",
+                            cancellationToken);
+                    }
 
                     if (posterStatus.Value == OrderStatus.Cancelled)
                     {
