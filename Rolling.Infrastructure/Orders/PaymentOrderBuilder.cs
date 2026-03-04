@@ -170,10 +170,13 @@ internal static class PaymentOrderBuilder
         var branchPhone = GetString(root, "branch_phone", "branchPhone");
         var fcmToken = GetString(root, "fcm_token", "fcmToken");
 
-        var deliveryFee = NormalizeAmount(GetDecimal(root, "delivery_price", "deliveryPrice") ?? 0m, transaction.Amount);
-        var total = NormalizeAmount(GetDecimal(root, "total") ?? transaction.Amount, transaction.Amount);
-        var discount = NormalizeAmount(GetDecimal(root, "discount") ?? 0m, total);
-        var subtotal = NormalizeAmount(GetDecimal(root, "subtotal") ?? (total - deliveryFee + discount), total);
+        // Keep checkout amounts as-is.
+        // Online payment flows already send major currency units (UZS), and aggressive
+        // auto-normalization ("/100") causes wrong sums for high-discount/bonus orders.
+        var deliveryFee = GetDecimal(root, "delivery_price", "deliveryPrice") ?? 0m;
+        var total = GetDecimal(root, "total") ?? transaction.Amount;
+        var discount = GetDecimal(root, "discount") ?? 0m;
+        var subtotal = GetDecimal(root, "subtotal") ?? (total - deliveryFee + discount);
 
         if (subtotal < 0)
         {
@@ -577,21 +580,6 @@ internal static class PaymentOrderBuilder
         }
 
         return false;
-    }
-
-    private static decimal NormalizeAmount(decimal value, decimal reference)
-    {
-        if (value <= 0)
-        {
-            return value;
-        }
-
-        if (reference > 0 && value > reference * 3m)
-        {
-            return Math.Round(value / 100m, 2, MidpointRounding.AwayFromZero);
-        }
-
-        return value;
     }
 
     private sealed record OrderSnapshot(

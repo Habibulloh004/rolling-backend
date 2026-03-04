@@ -18,6 +18,7 @@ public static class TelegramOrderMessageBuilder
         string? MapLink,
         double? DistanceKm,
         decimal Subtotal,
+        decimal Discount,
         decimal DeliveryFee,
         decimal Total,
         string PaymentDescription,
@@ -67,6 +68,7 @@ public static class TelegramOrderMessageBuilder
             MapLink: mapLink,
             DistanceKm: distanceKm,
             Subtotal: order.Subtotal,
+            Discount: order.Discount,
             DeliveryFee: order.DeliveryFee,
             Total: order.Total,
             PaymentDescription: paymentDescription,
@@ -127,6 +129,7 @@ public static class TelegramOrderMessageBuilder
             : "Не указан";
         var mapLinkLine = string.IsNullOrWhiteSpace(context.MapLink) ? "Не указан" : context.MapLink!;
         var addressComment = ResolveValue(context.AddressComment, "Не указан");
+        var orderAmount = ResolveOrderAmountForDisplay(context);
 
         var lines = new List<string>
         {
@@ -136,7 +139,7 @@ public static class TelegramOrderMessageBuilder
             $"🏠 Адрес: {context.Address}",
             $"🔗 [Посмотреть на карте] {mapLinkLine}",
             $"🗺️ Расстояние: {distanceText}",
-            $"💵 Сумма заказа: {FormatAmount(context.Subtotal)}",
+            $"💵 Сумма заказа: {FormatAmount(orderAmount)}",
             $"💳 Метод оплаты: {context.PaymentDescription}",
             $"🎁 Бонусы: {FormatAmount(context.Bonuses)}",
             $"💵 К оплате: {FormatAmount(context.Total)}",
@@ -287,6 +290,17 @@ public static class TelegramOrderMessageBuilder
             NumberDecimalDigits = 0
         };
         return $"{rounded.ToString("N0", formatInfo)} сум";
+    }
+
+    private static decimal ResolveOrderAmountForDisplay(OrderContext context)
+    {
+        var derived = context.Total - context.DeliveryFee + context.Discount;
+        if (derived < 0m)
+        {
+            derived = 0m;
+        }
+
+        return Math.Max(context.Subtotal, derived);
     }
 
     private static async Task<BranchConfiguration?> ResolveBranchConfigurationAsync(
