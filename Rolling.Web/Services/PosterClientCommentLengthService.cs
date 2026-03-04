@@ -55,28 +55,8 @@ public sealed class PosterClientCommentLengthService
 
             var oldComment = GetPropertyValue(client, "comment") ?? string.Empty;
             var oldMetadata = ParseCommentMetadata(oldComment);
-            var currentPosterOrderKey = BuildPosterOrderKey(order);
-
-            if (string.Equals(oldMetadata.LastOrderId, order.Id, StringComparison.Ordinal) ||
-                (!string.IsNullOrWhiteSpace(currentPosterOrderKey) &&
-                 string.Equals(oldMetadata.LastPosterOrderKey, currentPosterOrderKey, StringComparison.OrdinalIgnoreCase)))
-            {
-                _logger.LogInformation(
-                    "Poster client comment length increment skipped - already processed: OrderId={OrderId}, ClientId={ClientId}, Source={Source}, PosterOrderKey={PosterOrderKey}",
-                    order.Id,
-                    clientId,
-                    source,
-                    currentPosterOrderKey ?? "<none>");
-                return;
-            }
-
             var newLength = oldMetadata.Length == int.MaxValue ? int.MaxValue : oldMetadata.Length + 1;
-            var newMetadata = oldMetadata with
-            {
-                Length = newLength,
-                LastOrderId = order.Id,
-                LastPosterOrderKey = currentPosterOrderKey
-            };
+            var newMetadata = oldMetadata with { Length = newLength };
             var newComment = BuildCommentJson(newMetadata);
 
             using var updateDocument = await _posterService.UpdateClientCommentAsync(clientId, newComment, cancellationToken);
@@ -222,9 +202,7 @@ public sealed class PosterClientCommentLengthService
             var root = document.RootElement;
             var password = GetPropertyValue(root, "password");
             var length = ParseLength(root);
-            var lastOrderId = GetPropertyValue(root, "last_order_id");
-            var lastPosterOrderKey = GetPropertyValue(root, "last_poster_order_key");
-            metadata = new CommentMetadata(password, length, lastOrderId, lastPosterOrderKey);
+            metadata = new CommentMetadata(password, length);
             return true;
         }
         catch (JsonException)
@@ -266,58 +244,11 @@ public sealed class PosterClientCommentLengthService
             payload["password"] = metadata.Password.Trim();
         }
 
-        if (!string.IsNullOrWhiteSpace(metadata.LastOrderId))
-        {
-            payload["last_order_id"] = metadata.LastOrderId.Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(metadata.LastPosterOrderKey))
-        {
-            payload["last_poster_order_key"] = metadata.LastPosterOrderKey.Trim();
-        }
-
         return JsonSerializer.Serialize(payload);
     }
 
-    private static string? BuildPosterOrderKey(Order order)
+    private sealed record CommentMetadata(string? Password, int Length)
     {
-        var transactionId = NormalizeOrderIdentifier(order.PosterTransactionId);
-        if (!string.IsNullOrWhiteSpace(transactionId))
-        {
-            return $"tx:{transactionId}";
-        }
-
-        var incomingOrderId = NormalizeOrderIdentifier(order.PosterIncomingOrderId);
-        if (!string.IsNullOrWhiteSpace(incomingOrderId))
-        {
-            return $"in:{incomingOrderId}";
-        }
-
-        return null;
-    }
-
-    private static string? NormalizeOrderIdentifier(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith("#", StringComparison.Ordinal))
-        {
-            trimmed = trimmed[1..];
-        }
-
-        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
-    }
-
-    private sealed record CommentMetadata(
-        string? Password,
-        int Length,
-        string? LastOrderId,
-        string? LastPosterOrderKey)
-    {
-        public static CommentMetadata Empty { get; } = new(null, 0, null, null);
+        public static CommentMetadata Empty { get; } = new(null, 0);
     }
 }
