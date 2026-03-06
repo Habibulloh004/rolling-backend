@@ -111,6 +111,7 @@ public sealed class OrderStatusPollingService : BackgroundService
         var notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var orderUpdatesPublisher = scope.ServiceProvider.GetRequiredService<IOrderUpdatesPublisher>();
+        var posterClientCommentLengthService = scope.ServiceProvider.GetRequiredService<PosterClientCommentLengthService>();
 
         var now = DateTime.UtcNow;
         PruneTrackedOrders(now);
@@ -290,6 +291,23 @@ public sealed class OrderStatusPollingService : BackgroundService
 
                     updatedDbCount++;
                     UpdateTrackedOrderStatus(order.OrderId, posterStatus.Value);
+
+                    if (posterStatus.Value == OrderStatus.Delivered)
+                    {
+                        if (await TryAcquireLengthIncrementLockAsync(dbContext, updatedOrder.Id, cancellationToken))
+                        {
+                            await posterClientCommentLengthService.TryIncrementLengthAsync(
+                                updatedOrder,
+                                "polling",
+                                cancellationToken);
+                        }
+                        else
+                        {
+                            _logger.LogInformation(
+                                "Skipping Poster client length increment - already processed: OrderId={OrderId}",
+                                updatedOrder.Id);
+                        }
+                    }
 
                     if (posterStatus.Value == OrderStatus.Cancelled)
                     {
@@ -2382,5 +2400,21 @@ public sealed class OrderStatusPollingService : BackgroundService
 
     private static bool IsTerminalStatus(OrderStatus status) =>
         status is OrderStatus.Delivered or OrderStatus.Cancelled;
+
+    private static async Task<bool> TryAcquireLengthIncrementLockAsync(
+        AppDbContext dbContext,
+        string orderId,
+        CancellationToken cancellationToken)
+    {
+        var affectedRows = await dbContext.Orders
+            .Where(order => order.Id == orderId && !order.CountedTowardsLoyalty)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(order => order.CountedTowardsLoyalty, true)
+                    .SetProperty(order => order.UpdatedAt, DateTime.UtcNow),
+                cancellationToken);
+
+        return affectedRows > 0;
+    }
 
 }
