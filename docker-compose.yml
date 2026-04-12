@@ -2,7 +2,10 @@ name: rolling-backend
 
 services:
   rolling-api:
-    image: ${ROLLING_API_IMAGE:-ghcr.io/habibulloh004/rolling-backend:main}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rolling-backend:latest
     container_name: rolling_api
     restart: unless-stopped
     environment:
