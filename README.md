@@ -24,8 +24,28 @@ fi
 
 cd rolling-android
 ./gradlew installDebug
-"$SDK/platform-tools/adb" shell monkey -p com.abdurrahmonxoja.rollingsushi -c android.intent.category.LAUNCHER 1
+"$SDK/platform-tools/adb" shell am start -n com.abdurrahmonxoja.RollingSushi/com.example.sushi_alpha_project.MainActivity
 
+mobile
+
+SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"; SERIAL="W4AANFMNT8B69DVO"; ./gradlew assembleDebug && "$SDK/platform-tools/adb" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk && "$SDK/platform-tools/adb" -s "$SERIAL" shell am start -n com.abdurrahmonxoja.RollingSushi/com.example.sushi_alpha_project.MainActivity
+
+with reinstall
+
+SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"; SERIAL="W4AANFMNT8B69DVO"; ./gradlew assembleDebug && "$SDK/platform-tools/adb" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk && "$SDK/platform-tools/adb" -s "$SERIAL" shell am start -n com.abdurrahmonxoja.RollingSushi/com.example.sushi_alpha_project.MainActivity
+
+new command
+
+cd rolling-android && adb devices && ./gradlew app:installDebug && adb shell monkey -p com.abdurrahmonxoja.RollingSushi -c android.intent.category.LAUNCHER 1
+
+
+emulator
+
+SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"; SERIAL=$("$SDK/platform-tools/adb" devices | awk '/^emulator-/{print $1; exit}'); ./gradlew assembleDebug && "$SDK/platform-tools/adb" -s "$SERIAL" install -r app/build/outputs/apk/debug/app-debug.apk && "$SDK/platform-tools/adb" -s "$SERIAL" shell am start -n com.abdurrahmonxoja.RollingSushi/com.example.sushi_alpha_project.MainActivity
+
+build
+
+./gradlew :app:compileDebugKotlin
 
 # Rolling
 

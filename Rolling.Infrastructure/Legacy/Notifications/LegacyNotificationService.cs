@@ -304,6 +304,7 @@ public sealed class NotificationService
             {
                 Notification = new AndroidNotification
                 {
+                    ChannelId = "rolling_orders_high_v2",
                     Icon = "ic_notification",
                     Color = "#004032",
                     Sound = "default"

@@ -16,7 +16,6 @@ public sealed class WebhooksController : ControllerBase
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<WebhooksController> _logger;
     private readonly ICachedPosterService _posterCache;
-    private readonly WebSocketConnectionManager _posterUpdateSockets;
     private readonly PosterTransactionWebhookHandler _transactionWebhookHandler;
 
     public WebhooksController(
@@ -31,7 +30,6 @@ public sealed class WebhooksController : ControllerBase
         _timeProvider = timeProvider;
         _logger = logger;
         _posterCache = posterCache;
-        _posterUpdateSockets = posterUpdateSockets;
         _transactionWebhookHandler = transactionWebhookHandler;
     }
 
@@ -327,14 +325,11 @@ public sealed class WebhooksController : ControllerBase
     private async Task BroadcastClientUpdatesAsync(PosterCacheInvalidationContext context, CancellationToken cancellationToken)
     {
         var clientIds = context.ClientIds.Count > 0 ? context.ClientIds.ToArray() : Array.Empty<string>();
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "poster_client_updated",
-            clientIds,
-            refreshAll = clientIds.Length == 0
-        });
-
-        await _posterUpdateSockets.BroadcastAsync(payload, cancellationToken);
+        _logger.LogInformation(
+            "Suppressed poster client update websocket broadcast. ClientIds={ClientIdsCount}, RefreshAll={RefreshAll}",
+            clientIds.Length,
+            clientIds.Length == 0);
+        await Task.CompletedTask;
     }
 
     private async Task BroadcastCacheInvalidationAsync(PosterCacheInvalidationContext context, CancellationToken cancellationToken)
@@ -359,15 +354,9 @@ public sealed class WebhooksController : ControllerBase
         if (invalidatedTypes.Count == 0)
             return;
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "cache_invalidated",
-            invalidatedTypes,
-            clientIds = context.ClientIds.Count > 0 ? context.ClientIds.ToArray() : Array.Empty<string>(),
-            timestamp = _timeProvider.GetUtcNow().ToString("O")
-        });
-
-        await _posterUpdateSockets.BroadcastAsync(payload, cancellationToken);
-        _logger.LogInformation("Broadcasted cache invalidation for types: {Types}", string.Join(", ", invalidatedTypes));
+        _logger.LogInformation(
+            "Suppressed cache invalidation websocket broadcast for types: {Types}",
+            string.Join(", ", invalidatedTypes));
+        await Task.CompletedTask;
     }
 }

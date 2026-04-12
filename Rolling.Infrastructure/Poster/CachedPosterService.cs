@@ -25,16 +25,16 @@ public interface ICachedPosterService
     Task<JsonDocument?> CreateClientAsync(JsonElement payload, CancellationToken cancellationToken = default);
     Task<JsonDocument?> CreateIncomingOrderAsync(JsonElement payload, CancellationToken cancellationToken = default);
 
-    Task<CachedResponse<JsonDocument?>> RevalidateProductsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidateAllProductsAsync(CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidateCategoriesAsync(CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidatePromotionsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
+    Task<CachedResponse<JsonDocument?>> RevalidateProductsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default, bool publishRevalidation = true);
+    Task<CachedResponse<JsonDocument?>> RevalidateAllProductsAsync(CancellationToken cancellationToken = default, bool publishRevalidation = true);
+    Task<CachedResponse<JsonDocument?>> RevalidateCategoriesAsync(CancellationToken cancellationToken = default, bool publishRevalidation = true);
+    Task<CachedResponse<JsonDocument?>> RevalidatePromotionsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default, bool publishRevalidation = true);
     Task<CachedResponse<JsonDocument?>> RevalidateClientsAsync(Dictionary<string, string?>? queryParams = null, CancellationToken cancellationToken = default);
     Task<CachedResponse<JsonDocument?>> RevalidateClientAsync(string clientId, CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidateClientGroupsAsync(CancellationToken cancellationToken = default);
+    Task<CachedResponse<JsonDocument?>> RevalidateClientGroupsAsync(CancellationToken cancellationToken = default, bool publishRevalidation = true);
     Task<CachedResponse<JsonDocument?>> RevalidateTransactionsAsync(Dictionary<string, string?> queryParams, CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidateSpotsAsync(CancellationToken cancellationToken = default);
-    Task<CachedResponse<JsonDocument?>> RevalidateEmployeesAsync(CancellationToken cancellationToken = default);
+    Task<CachedResponse<JsonDocument?>> RevalidateSpotsAsync(CancellationToken cancellationToken = default, bool publishRevalidation = true);
+    Task<CachedResponse<JsonDocument?>> RevalidateEmployeesAsync(CancellationToken cancellationToken = default, bool publishRevalidation = true);
     Task<RevalidateAllResponse> RevalidateAllAsync(CancellationToken cancellationToken = default);
 }
 
@@ -149,6 +149,21 @@ public class CachedPosterService : ICachedPosterService
         await _publisher.PublishAsync(payload, cancellationToken);
     }
 
+    private static bool AreJsonDocumentsEquivalent(JsonDocument? left, JsonDocument? right)
+    {
+        if (left is null && right is null)
+        {
+            return true;
+        }
+
+        if (left is null || right is null)
+        {
+            return false;
+        }
+
+        return JsonElement.DeepEquals(left.RootElement, right.RootElement);
+    }
+
     private async Task<CachedResponse<JsonDocument?>> RefreshWithLockAsync(
         SemaphoreSlim gate,
         KeyedInMemoryArrayCache<JsonDocument?> cache,
@@ -157,7 +172,8 @@ public class CachedPosterService : ICachedPosterService
         Func<Task<JsonDocument?>> fetch,
         ArrayCacheEntry<JsonDocument?>? fallbackEntry,
         string? changeType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool publishRevalidation = true)
     {
         await gate.WaitAsync(cancellationToken);
         try
@@ -174,8 +190,21 @@ public class CachedPosterService : ICachedPosterService
                 return BuildApiResponse(null);
             }
 
+            if (fallbackEntry != null && AreJsonDocumentsEquivalent(fallbackEntry.Data, data))
+            {
+                _logger.LogDebug(
+                    "Poster refresh produced unchanged payload for {Resource} ({CacheKey}); skipping realtime revalidation",
+                    resource,
+                    cacheKey);
+                data.Dispose();
+                return BuildCacheResponse(fallbackEntry, "memory", true);
+            }
+
             var entry = cache.Set(cacheKey, data);
-            await PublishRevalidationAsync(resource, entry, changeType, cancellationToken);
+            if (publishRevalidation)
+            {
+                await PublishRevalidationAsync(resource, entry, changeType, cancellationToken);
+            }
             return BuildCacheResponse(entry, "api", false);
         }
         finally
@@ -398,7 +427,8 @@ public class CachedPosterService : ICachedPosterService
 
     public async Task<CachedResponse<JsonDocument?>> RevalidateProductsAsync(
         Dictionary<string, string?>? queryParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         var cacheKey = BuildQueryKey(queryParams);
         var existing = _cacheStore.Products.Get(cacheKey);
@@ -411,10 +441,13 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetProductsAsync(cancellationToken),
             existing,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
-    public async Task<CachedResponse<JsonDocument?>> RevalidateAllProductsAsync(CancellationToken cancellationToken = default)
+    public async Task<CachedResponse<JsonDocument?>> RevalidateAllProductsAsync(
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         _logger.LogInformation("Revalidating all products caches...");
         var keys = GetKnownKeys(_cacheStore.Products, BuildQueryKey(null));
@@ -431,13 +464,16 @@ public class CachedPosterService : ICachedPosterService
                 () => _posterService.GetProductsAsync(cancellationToken),
                 existing,
                 "revalidated",
-                cancellationToken);
+                cancellationToken,
+                publishRevalidation);
         }
 
         return last ?? BuildApiResponse(null);
     }
 
-    public async Task<CachedResponse<JsonDocument?>> RevalidateCategoriesAsync(CancellationToken cancellationToken = default)
+    public async Task<CachedResponse<JsonDocument?>> RevalidateCategoriesAsync(
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         var existing = _cacheStore.Categories.Get(PosterArrayCacheStore.DefaultKey);
         _logger.LogInformation("Revalidating categories cache...");
@@ -449,12 +485,14 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetCategoriesAsync(cancellationToken),
             existing,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
     public async Task<CachedResponse<JsonDocument?>> RevalidatePromotionsAsync(
         Dictionary<string, string?>? queryParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         if (queryParams == null || queryParams.Count == 0)
         {
@@ -473,7 +511,8 @@ public class CachedPosterService : ICachedPosterService
                     () => _posterService.GetPromotionsAsync(null, cancellationToken),
                     existing,
                     "revalidated",
-                    cancellationToken);
+                    cancellationToken,
+                    publishRevalidation);
             }
 
             return last ?? BuildApiResponse(null);
@@ -490,7 +529,8 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetPromotionsAsync(queryParams, cancellationToken),
             cached,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
     public async Task<CachedResponse<JsonDocument?>> RevalidateClientsAsync(
@@ -513,7 +553,9 @@ public class CachedPosterService : ICachedPosterService
         return response;
     }
 
-    public async Task<CachedResponse<JsonDocument?>> RevalidateClientGroupsAsync(CancellationToken cancellationToken = default)
+    public async Task<CachedResponse<JsonDocument?>> RevalidateClientGroupsAsync(
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         var existing = _cacheStore.ClientGroups.Get(PosterArrayCacheStore.DefaultKey);
         _logger.LogInformation("Revalidating client groups cache...");
@@ -525,7 +567,8 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetClientGroupsAsync(cancellationToken),
             existing,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
     public async Task<CachedResponse<JsonDocument?>> RevalidateTransactionsAsync(
@@ -544,7 +587,9 @@ public class CachedPosterService : ICachedPosterService
         return response;
     }
 
-    public async Task<CachedResponse<JsonDocument?>> RevalidateSpotsAsync(CancellationToken cancellationToken = default)
+    public async Task<CachedResponse<JsonDocument?>> RevalidateSpotsAsync(
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         var existing = _cacheStore.Spots.Get(PosterArrayCacheStore.DefaultKey);
         _logger.LogInformation("Revalidating spots cache...");
@@ -556,10 +601,13 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetSpotsAsync(cancellationToken),
             existing,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
-    public async Task<CachedResponse<JsonDocument?>> RevalidateEmployeesAsync(CancellationToken cancellationToken = default)
+    public async Task<CachedResponse<JsonDocument?>> RevalidateEmployeesAsync(
+        CancellationToken cancellationToken = default,
+        bool publishRevalidation = true)
     {
         var existing = _cacheStore.Employees.Get(PosterArrayCacheStore.DefaultKey);
         _logger.LogInformation("Revalidating employees cache...");
@@ -571,7 +619,8 @@ public class CachedPosterService : ICachedPosterService
             () => _posterService.GetEmployeesAsync(cancellationToken),
             existing,
             "revalidated",
-            cancellationToken);
+            cancellationToken,
+            publishRevalidation);
     }
 
     public async Task<RevalidateAllResponse> RevalidateAllAsync(CancellationToken cancellationToken = default)

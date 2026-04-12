@@ -8,6 +8,7 @@ namespace Rolling.Web.HostedServices;
 
 public sealed class PosterCacheRefreshService : BackgroundService
 {
+    private const int MinimumScheduledRefreshSeconds = 60;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly PosterCacheRefreshOptions _options;
     private readonly ILogger<PosterCacheRefreshService> _logger;
@@ -31,12 +32,42 @@ public sealed class PosterCacheRefreshService : BackgroundService
 
         var tasks = new List<Task>
         {
-            RunPeriodicAsync("products", _options.ProductsSeconds, (cache, ct) => cache.RevalidateAllProductsAsync(ct), stoppingToken),
-            RunPeriodicAsync("categories", _options.CategoriesSeconds, (cache, ct) => cache.RevalidateCategoriesAsync(ct), stoppingToken),
-            RunPeriodicAsync("promotions", _options.PromotionsSeconds, (cache, ct) => cache.RevalidatePromotionsAsync(null, ct), stoppingToken),
-            RunPeriodicAsync("client-groups", _options.ClientGroupsSeconds, (cache, ct) => cache.RevalidateClientGroupsAsync(ct), stoppingToken),
-            RunPeriodicAsync("spots", _options.SpotsSeconds, (cache, ct) => cache.RevalidateSpotsAsync(ct), stoppingToken),
-            RunPeriodicAsync("employees", _options.EmployeesSeconds, (cache, ct) => cache.RevalidateEmployeesAsync(ct), stoppingToken)
+            RunPeriodicAsync(
+                "products",
+                NormalizeIntervalSeconds("products", _options.ProductsSeconds),
+                (cache, ct) => cache.RevalidateAllProductsAsync(ct, publishRevalidation: false),
+                stoppingToken
+            ),
+            RunPeriodicAsync(
+                "categories",
+                NormalizeIntervalSeconds("categories", _options.CategoriesSeconds),
+                (cache, ct) => cache.RevalidateCategoriesAsync(ct, publishRevalidation: false),
+                stoppingToken
+            ),
+            RunPeriodicAsync(
+                "promotions",
+                NormalizeIntervalSeconds("promotions", _options.PromotionsSeconds),
+                (cache, ct) => cache.RevalidatePromotionsAsync(null, ct, publishRevalidation: false),
+                stoppingToken
+            ),
+            RunPeriodicAsync(
+                "client-groups",
+                NormalizeIntervalSeconds("client-groups", _options.ClientGroupsSeconds),
+                (cache, ct) => cache.RevalidateClientGroupsAsync(ct, publishRevalidation: false),
+                stoppingToken
+            ),
+            RunPeriodicAsync(
+                "spots",
+                NormalizeIntervalSeconds("spots", _options.SpotsSeconds),
+                (cache, ct) => cache.RevalidateSpotsAsync(ct, publishRevalidation: false),
+                stoppingToken
+            ),
+            RunPeriodicAsync(
+                "employees",
+                NormalizeIntervalSeconds("employees", _options.EmployeesSeconds),
+                (cache, ct) => cache.RevalidateEmployeesAsync(ct, publishRevalidation: false),
+                stoppingToken
+            )
         };
 
         await Task.WhenAll(tasks);
@@ -49,18 +80,38 @@ public sealed class PosterCacheRefreshService : BackgroundService
             _logger.LogInformation("Warming poster caches on startup...");
             await WithPosterCacheAsync(cancellationToken, async cache =>
             {
-                await cache.RevalidateAllProductsAsync(cancellationToken);
-                await cache.RevalidateCategoriesAsync(cancellationToken);
-                await cache.RevalidatePromotionsAsync(null, cancellationToken);
-                await cache.RevalidateClientGroupsAsync(cancellationToken);
-                await cache.RevalidateSpotsAsync(cancellationToken);
-                await cache.RevalidateEmployeesAsync(cancellationToken);
+                await cache.RevalidateAllProductsAsync(cancellationToken, publishRevalidation: false);
+                await cache.RevalidateCategoriesAsync(cancellationToken, publishRevalidation: false);
+                await cache.RevalidatePromotionsAsync(null, cancellationToken, publishRevalidation: false);
+                await cache.RevalidateClientGroupsAsync(cancellationToken, publishRevalidation: false);
+                await cache.RevalidateSpotsAsync(cancellationToken, publishRevalidation: false);
+                await cache.RevalidateEmployeesAsync(cancellationToken, publishRevalidation: false);
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to warm poster caches");
         }
+    }
+
+    private int NormalizeIntervalSeconds(string name, int intervalSeconds)
+    {
+        if (intervalSeconds <= 0)
+        {
+            return intervalSeconds;
+        }
+
+        if (intervalSeconds < MinimumScheduledRefreshSeconds)
+        {
+            _logger.LogWarning(
+                "Poster cache refresh interval for {CacheName} was set to {ConfiguredSeconds}s. Clamping to {MinimumSeconds}s to avoid cache churn.",
+                name,
+                intervalSeconds,
+                MinimumScheduledRefreshSeconds);
+            return MinimumScheduledRefreshSeconds;
+        }
+
+        return intervalSeconds;
     }
 
     private async Task RunPeriodicAsync(
