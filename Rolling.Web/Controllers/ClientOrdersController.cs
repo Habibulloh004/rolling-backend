@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rolling.Application.Abstractions.Realtime;
+using Rolling.Infrastructure.Messaging;
 using Rolling.Infrastructure.Notifications;
 using Rolling.Infrastructure.Orders;
 using Rolling.Infrastructure.Persistence.Postgres;
@@ -23,6 +24,7 @@ public sealed class ClientOrdersController : ControllerBase
     private readonly ActiveOrderTracker _orderTracker;
     private readonly TakeawayOrderTracker _takeawayOrderTracker;
     private readonly IOrderUpdatesPublisher _orderUpdatesPublisher;
+    private readonly TelegramService _telegramService;
     private readonly ILogger<ClientOrdersController> _logger;
 
     public ClientOrdersController(
@@ -30,12 +32,14 @@ public sealed class ClientOrdersController : ControllerBase
         ActiveOrderTracker orderTracker,
         TakeawayOrderTracker takeawayOrderTracker,
         IOrderUpdatesPublisher orderUpdatesPublisher,
+        TelegramService telegramService,
         ILogger<ClientOrdersController> logger)
     {
         _dbContext = dbContext;
         _orderTracker = orderTracker;
         _takeawayOrderTracker = takeawayOrderTracker;
         _orderUpdatesPublisher = orderUpdatesPublisher;
+        _telegramService = telegramService;
         _logger = logger;
     }
 
@@ -186,6 +190,8 @@ public sealed class ClientOrdersController : ControllerBase
             OrderUpdateEventFactory.Create(order, "updated"),
             cancellationToken);
 
+        await TrySendCancelTelegramAsync(order, cancellationToken);
+
         return Ok(new
         {
             cancelled = true,
@@ -193,6 +199,31 @@ public sealed class ClientOrdersController : ControllerBase
             orderId = order.Id,
             orderNumber = ResolveDisplayOrderNumber(order.PosterIncomingOrderId, order.PosterTransactionId, order.OrderNumber)
         });
+    }
+
+    private async Task TrySendCancelTelegramAsync(Order order, CancellationToken cancellationToken)
+    {
+        var paymentDescription = TelegramOrderMessageBuilder.BuildPaymentDescription(order);
+        var orderSummary = "Заказ отменён клиентом через веб-сайт.\nТип заказа: Через веб-сайт";
+        var context = await TelegramOrderMessageBuilder.CreateContextAsync(
+            _dbContext,
+            order,
+            orderSummary,
+            paymentDescription,
+            cancellationToken);
+        var message = TelegramOrderMessageBuilder.BuildCancelOrderMessage(context);
+
+        try
+        {
+            await _telegramService.SendMessageAsync(message, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send Telegram cancel message: OrderId={OrderId}, OrderNumber={OrderNumber}",
+                order.Id,
+                order.OrderNumber);
+        }
     }
 
     /// <summary>

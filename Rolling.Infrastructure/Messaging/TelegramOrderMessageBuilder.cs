@@ -92,7 +92,7 @@ public static class TelegramOrderMessageBuilder
                 case "cash":
                     return "Наличные";
                 case "card":
-                    return "Карта (Не оплачено)";
+                    return "Карта";
             }
         }
 
@@ -101,8 +101,8 @@ public static class TelegramOrderMessageBuilder
             return order.PaymentMethodId switch
             {
                 "1" => "Наличные",
-                "2" => "Карта (Не оплачено)",
-                "3" => "Карта (Оплата курьеру)",
+                "2" => "Карта",
+                "3" => "Карта",
                 "4" => "Payme (Оплачено)",
                 "5" => "Click (Оплачено)",
                 _ => ResolveValue(order.PaymentMethod, "Не указан")
@@ -115,10 +115,12 @@ public static class TelegramOrderMessageBuilder
     public static string BuildOrderSummary(Order order, string paymentDescription)
     {
         var phone = ResolvePhone(order);
+        var sourceLabel = ResolveOrderSourceLabel(order);
+        var orderTypeDescription = ResolveOrderTypeDescription(sourceLabel);
         return $"""
 Тип оплаты : {paymentDescription}
 Номер телефона : {phone}
-Тип заказа: Через мобильное приложение (Swift)
+Тип заказа: {orderTypeDescription}
 """.Trim();
     }
 
@@ -130,6 +132,7 @@ public static class TelegramOrderMessageBuilder
         var mapLinkLine = string.IsNullOrWhiteSpace(context.MapLink) ? "Не указан" : context.MapLink!;
         var addressComment = ResolveValue(context.AddressComment, "Не указан");
         var orderAmount = ResolveOrderAmountForDisplay(context);
+        var sourceLabel = ResolveSourceLabelFromSummary(context.OrderSummary);
 
         var lines = new List<string>
         {
@@ -144,7 +147,7 @@ public static class TelegramOrderMessageBuilder
             $"🎁 Бонусы: {FormatAmount(context.Bonuses)}",
             $"💵 К оплате: {FormatAmount(context.Total)}",
             $"🛍 Тип заказа: {context.OrderType}",
-            "📲 Источник: Мобильное приложение (Swift)",
+            $"📲 Источник: {sourceLabel}",
             $"🚚 Доставка: {FormatAmount(context.DeliveryFee)}",
             $"✏️ Комментарий: {context.OrderSummary}"
         };
@@ -167,6 +170,7 @@ public static class TelegramOrderMessageBuilder
         var isCancelledByClient = context.OrderSummary.Contains("клиентом", StringComparison.OrdinalIgnoreCase);
         var headerIcon = isCancelledByClient ? "❌" : "⚠️";
         var headerText = isCancelledByClient ? "ЗАКАЗ ОТМЕНЁН КЛИЕНТОМ" : "ЗАКАЗ ОТМЕНЁН АДМИНИСТРАТОРОМ";
+        var sourceLabel = ResolveSourceLabelFromSummary(context.OrderSummary);
 
         var lines = new List<string>
         {
@@ -185,7 +189,7 @@ public static class TelegramOrderMessageBuilder
             lines.Add($"🎁 Бонусы: {FormatAmount(context.Bonuses)}");
         }
 
-        lines.Add("📲 Источник: Мобильное приложение (Swift)");
+        lines.Add($"📲 Источник: {sourceLabel}");
         lines.Add(string.Empty);
         lines.Add($"⚠️ {context.OrderSummary}");
 
@@ -265,6 +269,60 @@ public static class TelegramOrderMessageBuilder
         }
 
         return "Не указан";
+    }
+
+    private static string ResolveOrderSourceLabel(Order order)
+    {
+        var source = (order.Comment ?? string.Empty).ToLowerInvariant();
+
+        if (source.Contains("веб-сайт") || source.Contains("веб сайт") || source.Contains("website"))
+        {
+            return "Веб-сайт";
+        }
+
+        if (source.Contains("kotlin"))
+        {
+            return "Мобильное приложение (Kotlin)";
+        }
+
+        if (source.Contains("swift"))
+        {
+            return "Мобильное приложение (Swift)";
+        }
+
+        return "Мобильное приложение (Swift)";
+    }
+
+    private static string ResolveOrderTypeDescription(string sourceLabel)
+    {
+        return sourceLabel switch
+        {
+            "Веб-сайт" => "Через веб-сайт",
+            "Мобильное приложение (Kotlin)" => "Через мобильное приложение (Kotlin)",
+            _ => "Через мобильное приложение (Swift)"
+        };
+    }
+
+    private static string ResolveSourceLabelFromSummary(string? orderSummary)
+    {
+        var normalized = (orderSummary ?? string.Empty).ToLowerInvariant();
+
+        if (normalized.Contains("веб-сайт") || normalized.Contains("веб сайт") || normalized.Contains("website"))
+        {
+            return "Веб-сайт";
+        }
+
+        if (normalized.Contains("kotlin"))
+        {
+            return "Мобильное приложение (Kotlin)";
+        }
+
+        if (normalized.Contains("swift"))
+        {
+            return "Мобильное приложение (Swift)";
+        }
+
+        return "Мобильное приложение (Swift)";
     }
 
     private static string ResolveValue(string? value, string fallback)
