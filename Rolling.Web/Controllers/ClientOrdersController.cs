@@ -18,6 +18,7 @@ namespace Rolling.Web.Controllers;
 [Route("api/client/orders")]
 public sealed class ClientOrdersController : ControllerBase
 {
+    private const int ServiceModeSpot = 1;
     private const int ServiceModeTakeaway = 2;
 
     private readonly AppDbContext _dbContext;
@@ -66,7 +67,9 @@ public sealed class ClientOrdersController : ControllerBase
             .AsNoTracking()
             .Include(o => o.Items)
             .Include(o => o.Timeline)
-            .Where(o => o.Phone == normalizedPhone || o.Phone == phone)
+            .Where(o =>
+                (o.Phone == normalizedPhone || o.Phone == phone) &&
+                o.ServiceMode != ServiceModeSpot)
             .OrderByDescending(o => o.CreatedAt)
             .Take(size)
             .ToListAsync(cancellationToken);
@@ -101,7 +104,9 @@ public sealed class ClientOrdersController : ControllerBase
 
         var statuses = await _dbContext.Orders
             .AsNoTracking()
-            .Where(o => o.Phone == normalizedPhone || o.Phone == phone)
+            .Where(o =>
+                (o.Phone == normalizedPhone || o.Phone == phone) &&
+                o.ServiceMode != ServiceModeSpot)
             .OrderByDescending(o => o.CreatedAt)
             .Take(limit)
             .Select(o => new OrderStatusDto
