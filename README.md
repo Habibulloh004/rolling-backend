@@ -9,6 +9,8 @@ open "/Users/habibulloh1209mail.ru/Documents/Projects/full-combine/rolling-combi
 
 some changes
 
+hello world
+
 ## Run Android Emulator + `rolling-android`
 
 SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"
